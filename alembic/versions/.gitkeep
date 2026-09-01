@@ -1,0 +1,2 @@
+# Migrations land here from Phase 1, when the first entity is added.
+# Every model change ships with its migration in the same commit (§12).

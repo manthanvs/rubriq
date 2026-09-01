@@ -1,0 +1,26 @@
+# RubriQ dependencies.
+#
+# This file grows one phase at a time — see §10. Nothing for Phase 5 is
+# installed while Phase 2 is being built, so a broken AI dependency can never
+# stop the deterministic core from running.
+
+# --- Phase 0: foundation ---
+streamlit>=1.42            # view layer; 1.42 is the floor for native st.login() OIDC
+SQLAlchemy>=2.0            # engine and ORM; imported only inside core/db
+alembic>=1.13              # migration history is an SDLC deliverable, not optional
+psycopg[binary]>=3.1       # PostgreSQL driver for SQLAlchemy 2.0
+python-dotenv>=1.0         # lets Alembic and pytest read .env; they have no st.secrets
+
+# --- Dev ---
+pytest>=8                  # tests/core mirrors core/
+ruff>=0.6                  # lint + import order, one tool
+
+# --- Later phases, listed so the plan is visible; install when the phase starts ---
+# pydantic>=2              # Phase 5a — AI response schema enforcement
+# rapidfuzz>=3             # Phase 5a — evidence verification guard (§6.5)
+# openpyxl>=3.1            # Phase 4  — real .xlsx export
+# pdfplumber>=0.11         # Phase 3  — PDF text extraction at upload
+# python-docx>=1.1         # Phase 3  — DOCX text extraction
+# langgraph>=0.2           # Phase 5b — evaluation graph, core/ai/ only
+# langgraph-checkpoint-postgres>=2  # Phase 5b — resume-after-rerun checkpointer
+# streamlit-calendar>=1.3  # Phase 2  — pending decision #3

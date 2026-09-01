@@ -1,0 +1,11 @@
+# Normalise line endings so the repo behaves the same on the Windows
+# development machine and on a Linux lab machine.
+* text=auto
+
+# These must stay LF whatever the checkout platform: GNU make and POSIX
+# shells choke on carriage returns.
+Makefile text eol=lf
+*.sh text eol=lf
+
+# PowerShell is happier with CRLF on Windows.
+*.ps1 text eol=crlf

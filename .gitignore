@@ -1,0 +1,25 @@
+# Environment
+.venv/
+.env
+
+# Secrets — the .example file is committed, the real one never is
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Local databases
+*.db
+*.sqlite3
+
+# Student uploads live outside version control
+uploads/
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

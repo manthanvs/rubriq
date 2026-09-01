@@ -1,0 +1,10 @@
+[server]
+# Uploads are read for text extraction at submission time (Phase 3).
+maxUploadSize = 25
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "light"
+primaryColor = "#2E5AAC"

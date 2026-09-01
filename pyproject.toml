@@ -1,0 +1,26 @@
+# Tooling configuration only — RubriQ is run as an application, not installed
+# as a package, so there is no [build-system] section here.
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+# Puts the repo root on sys.path so `import core` works without installing
+# anything and without sys.path juggling inside conftest.
+pythonpath = ["."]
+addopts = "-q --strict-markers"
+
+[tool.ruff]
+line-length = 90
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle
+    "F",   # pyflakes
+    "I",   # import sorting
+    "UP",  # pyupgrade
+    "B",   # bugbear
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["core", "app"]
