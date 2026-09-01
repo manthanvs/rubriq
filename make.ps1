@@ -7,7 +7,7 @@
 
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('help', 'install', 'run', 'test', 'lint', 'fmt', 'migrate', 'revision', 'seed')]
+    [ValidateSet('help', 'install', 'run', 'test', 'lint', 'fmt', 'migrate', 'revision', 'seed-faculty', 'seed')]
     [string]$Target = 'help',
 
     [string]$M
@@ -35,6 +35,7 @@ switch ($Target) {
         'fmt       - ruff format + fix imports'
         'migrate   - alembic upgrade head'
         'revision  - alembic autogenerate, -M "message"'
+        'seed-faculty - seed the faculty allow-list into users'
         'seed      - demo dataset (arrives in Phase 7)'
         ''
         "interpreter: $py"
@@ -42,10 +43,10 @@ switch ($Target) {
     'install'  { Invoke-Py @('-m', 'pip', 'install', '-r', 'requirements.txt') }
     'run'      { Invoke-Py @('-m', 'streamlit', 'run', 'app/main.py') }
     'test'     { Invoke-Py @('-m', 'pytest') }
-    'lint'     { Invoke-Py @('-m', 'ruff', 'check', 'core', 'app', 'tests', 'alembic') }
+    'lint'     { Invoke-Py @('-m', 'ruff', 'check', 'core', 'app', 'tests', 'alembic', 'scripts') }
     'fmt' {
-        Invoke-Py @('-m', 'ruff', 'check', '--fix', 'core', 'app', 'tests', 'alembic')
-        Invoke-Py @('-m', 'ruff', 'format', 'core', 'app', 'tests', 'alembic')
+        Invoke-Py @('-m', 'ruff', 'check', '--fix', 'core', 'app', 'tests', 'alembic', 'scripts')
+        Invoke-Py @('-m', 'ruff', 'format', 'core', 'app', 'tests', 'alembic', 'scripts')
     }
     'migrate'  { Invoke-Py @('-m', 'alembic', 'upgrade', 'head') }
     'revision' {
@@ -54,5 +55,6 @@ switch ($Target) {
         }
         Invoke-Py @('-m', 'alembic', 'revision', '--autogenerate', '-m', $M)
     }
+    'seed-faculty' { Invoke-Py @('scripts/seed_faculty.py') }
     'seed'     { 'scripts/seed_demo.py arrives in Phase 7 (see CLAUDE.md section 10).' }
 }

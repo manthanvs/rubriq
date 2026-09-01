@@ -19,6 +19,8 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from core.errors import RubriQError
+
 DEFAULT_EMAIL_DOMAIN = "pccoepune.org"
 
 #: Checked in order, first non-empty wins. ``DATABASE_URL`` is the fallback
@@ -26,7 +28,7 @@ DEFAULT_EMAIL_DOMAIN = "pccoepune.org"
 DATABASE_URL_ENV_KEYS = ("RUBRIQ_DATABASE_URL", "DATABASE_URL")
 
 
-class ConfigError(RuntimeError):
+class ConfigError(RubriQError, RuntimeError):
     """Raised when required settings are missing or malformed.
 
     Carries a message meant to be shown to a human — see fix item 13. The app
@@ -45,6 +47,7 @@ class Settings:
     database_url: str
     allowed_email_domain: str = DEFAULT_EMAIL_DOMAIN
     faculty_allowlist: tuple[str, ...] = ()
+    admin_allowlist: tuple[str, ...] = ()
     llm_provider: str | None = None
     llm_api_key: str | None = None
     echo_sql: bool = False
@@ -73,6 +76,7 @@ class Settings:
                 rubriq.get("allowed_email_domain") or DEFAULT_EMAIL_DOMAIN
             ).strip(),
             faculty_allowlist=_as_emails(rubriq.get("faculty_allowlist")),
+            admin_allowlist=_as_emails(rubriq.get("admin_allowlist")),
             llm_provider=_optional_str(llm.get("provider")),
             llm_api_key=_optional_str(llm.get("api_key")),
             echo_sql=bool(database.get("echo_sql", False)),
@@ -95,6 +99,7 @@ class Settings:
                 env.get("RUBRIQ_EMAIL_DOMAIN") or DEFAULT_EMAIL_DOMAIN
             ).strip(),
             faculty_allowlist=_as_emails(env.get("RUBRIQ_FACULTY_ALLOWLIST")),
+            admin_allowlist=_as_emails(env.get("RUBRIQ_ADMIN_ALLOWLIST")),
             llm_provider=_optional_str(env.get("RUBRIQ_LLM_PROVIDER")),
             llm_api_key=_optional_str(env.get("RUBRIQ_LLM_API_KEY")),
             echo_sql=_as_bool(env.get("RUBRIQ_ECHO_SQL")),
@@ -122,6 +127,7 @@ class Settings:
             "database_url": _redact_url(self.database_url),
             "allowed_email_domain": self.allowed_email_domain,
             "faculty_allowlist_size": len(self.faculty_allowlist),
+            "admin_allowlist_size": len(self.admin_allowlist),
             "llm_provider": self.llm_provider or "—",
             "llm_api_key_present": bool(self.llm_api_key),
         }
