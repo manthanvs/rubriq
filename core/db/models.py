@@ -8,9 +8,11 @@ The §4 domain model lands one phase at a time. Present here:
 * ``Enrollment``      — which student is in which subject (Phase 2)
 * ``ProjectCycle``    — one run of a project through a subject (Phase 2)
 * ``ReviewMilestone`` — a dated review with marks attached (Phase 2)
+* ``Rubric`` / ``Criterion`` — versioned, frozen on publish (Phase 3)
+* ``Submission`` / ``SubmissionFile`` — versioned student work (Phase 3)
 
-Rubric, Criterion and Submission arrive in Phase 3. Every entity ships with
-its migration in the same commit (§12).
+Evaluation, CriterionScore and ScoreSheet arrive in Phases 4-5. Every entity
+ships with its migration in the same commit (§12).
 
 **Marks are ``Numeric``, never ``Float``.** Fix item 1 names float drift
 rendering 19.999999 as a way score integrity breaks; the cheapest place to
@@ -39,6 +41,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from core.auth.roles import Role
 from core.clock import utc_now
 from core.db.types import JSONColumn, UtcDateTime
+from core.submissions.status import SubmissionStatus
 
 
 class Base(DeclarativeBase):
@@ -234,3 +237,153 @@ class ReviewMilestone(Base):
 
     def __repr__(self) -> str:
         return f"<ReviewMilestone {self.index}: {self.title}>"
+
+
+class Rubric(Base):
+    """A versioned rubric for one milestone. Frozen once published.
+
+    Fix item 6 is entirely about this table. ``published_at IS NOT NULL`` makes
+    the rubric and its criteria read-only at the service layer: editing a
+    published rubric clones to ``version + 1`` rather than mutating in place,
+    so a submission graded against v1 is still graded against exactly what its
+    grader saw.
+
+    Only a published rubric is selectable for evaluation, which stops a
+    submission being scored against a half-written draft.
+    """
+
+    __tablename__ = "rubric"
+    __table_args__ = (
+        UniqueConstraint("milestone_id", "version", name="uq_rubric_milestone_version"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    milestone_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("review_milestone.id"), nullable=False, index=True
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    published_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
+    published_by: Mapped[str | None] = mapped_column(
+        String(320), ForeignKey("users.email")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        UtcDateTime(), nullable=False, default=utc_now, server_default=func.now()
+    )
+
+    @property
+    def is_published(self) -> bool:
+        return self.published_at is not None
+
+    def __repr__(self) -> str:
+        state = "published" if self.is_published else "draft"
+        return f"<Rubric m{self.milestone_id} v{self.version} {state}>"
+
+
+class Criterion(Base):
+    """One row of a rubric.
+
+    ``weight`` is a share of 100 across the rubric; ``max_score`` is what the
+    criterion is marked out of. §5 combines them as
+    ``Σ (score / max_score) * weight``, so both are ``Numeric`` — fix item 1
+    starts with the column type.
+
+    Never deleted. A criterion dropped from a later version is deactivated on
+    that version, because ``CriterionScore`` rows from earlier gradings still
+    reference it (invariant #7).
+    """
+
+    __tablename__ = "criterion"
+    __table_args__ = (UniqueConstraint("rubric_id", "code", name="uq_criterion_code"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    rubric_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("rubric.id"), nullable=False, index=True
+    )
+    code: Mapped[str] = mapped_column(String(16), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    weight: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
+    max_score: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
+    expected_evidence: Mapped[str | None] = mapped_column(Text)
+    is_mandatory: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    def __repr__(self) -> str:
+        return f"<Criterion {self.code} w{self.weight}>"
+
+
+class Submission(Base):
+    """One version of one student's work for one milestone.
+
+    Versioned rather than overwritten (invariant #7): re-uploading creates
+    ``version + 1`` and leaves the previous row and its files intact. The
+    unique constraint on ``(milestone_id, student_email, version)`` is what
+    makes that provable rather than merely intended — fix item 2.
+
+    ``text_extract`` is populated at upload so the AI layer in Phase 5 never
+    touches a file, and so the evidence guard has something to fuzzy-match
+    against without re-parsing a PDF.
+    """
+
+    __tablename__ = "submission"
+    __table_args__ = (
+        UniqueConstraint(
+            "milestone_id",
+            "student_email",
+            "version",
+            name="uq_submission_student_version",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    milestone_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("review_milestone.id"), nullable=False, index=True
+    )
+    student_email: Mapped[str] = mapped_column(
+        String(320), ForeignKey("users.email"), nullable=False, index=True
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    status: Mapped[SubmissionStatus] = mapped_column(
+        Enum(SubmissionStatus, native_enum=False, length=16),
+        nullable=False,
+        default=SubmissionStatus.SUBMITTED,
+    )
+    submitted_at: Mapped[datetime] = mapped_column(
+        UtcDateTime(), nullable=False, default=utc_now
+    )
+    text_extract: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    note: Mapped[str | None] = mapped_column(Text)
+
+    def __repr__(self) -> str:
+        return f"<Submission m{self.milestone_id} {self.student_email} v{self.version}>"
+
+
+class SubmissionFile(Base):
+    """One uploaded file belonging to a submission version.
+
+    ``sha256`` is stored so a re-upload of byte-identical work is visible as
+    such, and so a file on disk can be checked against what was recorded.
+    Files live outside the database under ``uploads/``; the row is the record,
+    the file is the payload.
+    """
+
+    __tablename__ = "submission_file"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    submission_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("submission.id"), nullable=False, index=True
+    )
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    stored_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    content_type: Mapped[str | None] = mapped_column(String(120))
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    extracted_chars: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    extract_note: Mapped[str | None] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(
+        UtcDateTime(), nullable=False, default=utc_now, server_default=func.now()
+    )
+
+    def __repr__(self) -> str:
+        return f"<SubmissionFile {self.filename}>"

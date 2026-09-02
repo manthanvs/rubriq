@@ -40,6 +40,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DATABASE_PATH = REPO_ROOT / "rubriq.db"
 DEFAULT_DATABASE_URL = f"sqlite:///{DEFAULT_DATABASE_PATH.as_posix()}"
 
+#: Where uploaded submission files are written. Outside the database and
+#: outside version control (see .gitignore), because the row is the record and
+#: the file is the payload.
+DEFAULT_UPLOADS_ROOT = REPO_ROOT / "uploads"
+
 
 class ConfigError(RubriQError, RuntimeError):
     """Raised when required settings are missing or malformed.
@@ -64,6 +69,7 @@ class Settings:
     llm_provider: str | None = None
     llm_api_key: str | None = None
     echo_sql: bool = False
+    uploads_root: Path = DEFAULT_UPLOADS_ROOT
 
     def __post_init__(self) -> None:
         if not self.database_url.strip():
@@ -95,6 +101,7 @@ class Settings:
             llm_provider=_optional_str(llm.get("provider")),
             llm_api_key=_optional_str(llm.get("api_key")),
             echo_sql=bool(database.get("echo_sql", False)),
+            uploads_root=_as_path(rubriq.get("uploads_root"), DEFAULT_UPLOADS_ROOT),
         )
 
     @classmethod
@@ -118,6 +125,7 @@ class Settings:
             llm_provider=_optional_str(env.get("RUBRIQ_LLM_PROVIDER")),
             llm_api_key=_optional_str(env.get("RUBRIQ_LLM_API_KEY")),
             echo_sql=_as_bool(env.get("RUBRIQ_ECHO_SQL")),
+            uploads_root=_as_path(env.get("RUBRIQ_UPLOADS_ROOT"), DEFAULT_UPLOADS_ROOT),
         )
 
     # -- derived ---------------------------------------------------------
@@ -182,6 +190,19 @@ def _as_emails(value: Any) -> tuple[str, ...]:
         if email:
             seen.setdefault(email, None)
     return tuple(seen)
+
+
+def _as_path(value: Any, fallback: Path) -> Path:
+    """Resolve a configured directory, falling back to the default.
+
+    Relative paths are resolved against the repository root rather than the
+    working directory, for the same reason DEFAULT_DATABASE_URL is absolute.
+    """
+    text = str(value).strip() if value else ""
+    if not text:
+        return fallback
+    candidate = Path(text)
+    return candidate if candidate.is_absolute() else REPO_ROOT / candidate
 
 
 def _optional_str(value: Any) -> str | None:

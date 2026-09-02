@@ -1,4 +1,4 @@
-"""A two-faculty, two-student world.
+"""A two-faculty, two-student world, shared by every test under tests/core.
 
 Isolation bugs hide in single-tenant fixtures: with one faculty member and one
 student, every query looks correctly scoped because there is nothing else to

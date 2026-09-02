@@ -27,6 +27,7 @@ except ImportError:
 
 from core.config import Settings  # noqa: E402  (path must be set up first)
 from core.db.models import Base  # noqa: E402
+from core.db.types import UtcDateTime  # noqa: E402
 
 config = context.config
 
@@ -51,8 +52,22 @@ def render_item(type_, obj, autogen_context) -> str | bool:
     keeps migrations readable and keeps them portable, which matters for the
     report: a migration file is an SDLC artifact people read, not just run.
 
+    The same hook keeps *application types* out of migrations. Autogenerate
+    renders a custom ``TypeDecorator`` by its import path — here that produced
+    ``core.db.types.UtcDateTime(...)`` in a file that never imports ``core``,
+    which is a ``NameError`` the moment it runs on a fresh database. Worse, even
+    with the import it would tie frozen migration history to code that is still
+    moving: renaming the class later would break every past migration.
+
+    ``UtcDateTime`` is a Python-side conversion wrapped around
+    ``DateTime(timezone=True)``. The conversion is runtime behaviour and means
+    nothing to DDL, so the migration gets the plain type it actually creates.
+
     Returning ``False`` falls back to alembic's default rendering.
     """
+    if type_ == "type" and isinstance(obj, UtcDateTime):
+        return "sa.DateTime(timezone=True)"
+
     if type_ == "server_default" and obj is not None:
         text = str(getattr(obj, "arg", obj)).strip().strip("()").upper()
         if text in {"CURRENT_TIMESTAMP", "NOW", "LOCALTIMESTAMP"}:

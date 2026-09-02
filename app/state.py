@@ -54,3 +54,25 @@ def invalidate() -> None:
     entries in the same process.
     """
     st.session_state[CACHE_VERSION_KEY] = cache_version() + 1
+
+
+#: One-shot messages that must survive the ``st.rerun()`` which follows a
+#: mutation. Without this, ``st.success(...)`` immediately before a rerun is
+#: drawn and then discarded, so the student never sees that their submission
+#: landed — the page just silently redraws.
+FLASH_KEY = "rubriq.flash"
+
+
+def flash(message: str, *, icon: str = ":material/check_circle:") -> None:
+    """Queue a success message to be shown after the next rerun."""
+    st.session_state[FLASH_KEY] = (message, icon)
+
+
+def render_flash() -> None:
+    """Draw and clear any queued message. Call once, near the top of a page."""
+    payload = st.session_state.pop(FLASH_KEY, None)
+    if payload is None:
+        return
+
+    message, icon = payload
+    st.success(message, icon=icon)
