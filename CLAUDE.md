@@ -506,7 +506,7 @@ The guidelines demand all SDLC components. These are tasks, not afterthoughts.
 |---|---|---|---|
 | 1 | Project title | — | ✅ **RubriQ** |
 | 2 | Stack | — | ✅ **Streamlit only** |
-| 3 | Calendar widget | `streamlit-calendar` vs agenda table | decide in Phase 2, record the reason |
+| 3 | Calendar widget | `streamlit-calendar` vs agenda table | ✅ **Agenda table** — decided in Phase 2. The calendar is a supporting page, not the centrepiece, so a third-party FullCalendar wrapper is dependency risk spent in the wrong place. An agenda also answers the question students actually have ("when is my next deadline" is a sorted list, not a month grid), and sorting soonest-first makes lateness legible before it matters (fix item 10). Both roles call one function in `app/components/calendar.py`, so swapping it later touches one file. Reason recorded in that module's docstring. |
 | 4 | LLM provider | Gemini vs Groq | pick on free-tier rate limits; the provider sits behind the graph nodes so it stays reversible |
 | 4b | Criterion batching | one LLM call per criterion vs batched | start batched (cheaper, fewer rate-limit hits); split only if per-criterion accuracy is visibly worse |
 | 5 | Individual or group | solo vs modular split | affects §11 module-ownership section |

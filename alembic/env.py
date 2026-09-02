@@ -42,6 +42,28 @@ def _database_url() -> str:
     return Settings.from_env().database_url
 
 
+def render_item(type_, obj, autogen_context) -> str | bool:
+    """Keep dialect-specific SQL out of generated migrations.
+
+    Autogenerate serialises a ``server_default`` as whatever the *connected*
+    dialect compiles it to. Run against SQLite, ``func.now()`` is written into
+    the migration file as the literal ``sa.text('(CURRENT_TIMESTAMP)')`` — and
+    that file then has to run on Postgres, which is the real target.
+
+    This bit twice by hand before it was worth automating. Returning the
+    symbolic form instead means a migration generated on the dev machine is
+    the same migration that runs in production.
+
+    Returning ``False`` falls back to alembic's default rendering.
+    """
+    if type_ == "server_default" and obj is not None:
+        text = str(getattr(obj, "arg", obj)).strip().strip("()").upper()
+        if text in {"CURRENT_TIMESTAMP", "NOW", "LOCALTIMESTAMP"}:
+            return "sa.func.now()"
+
+    return False
+
+
 def run_migrations_offline() -> None:
     """Emit SQL to stdout without connecting."""
     context.configure(
@@ -50,6 +72,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
+        render_item=render_item,
     )
 
     with context.begin_transaction():
@@ -68,6 +91,7 @@ def run_migrations_online() -> None:
             # SQLite cannot ALTER most things in place; batch mode rewrites the
             # table instead. Harmless on Postgres, essential for local dev.
             render_as_batch=connection.dialect.name == "sqlite",
+            render_item=render_item,
         )
 
         with context.begin_transaction():

@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import Engine, create_engine, text
+from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from core.config import Settings
@@ -45,7 +45,28 @@ def build_engine(settings: Settings) -> Engine:
     else:
         kwargs["pool_pre_ping"] = True
 
-    return create_engine(settings.database_url, **kwargs)
+    engine = create_engine(settings.database_url, **kwargs)
+
+    if settings.dialect == "sqlite":
+        _enforce_sqlite_foreign_keys(engine)
+
+    return engine
+
+
+def _enforce_sqlite_foreign_keys(engine: Engine) -> None:
+    """Turn on foreign-key enforcement for SQLite connections.
+
+    SQLite ignores foreign keys unless asked not to, per connection. Without
+    this, an insert referencing a missing parent row succeeds locally and
+    fails on Postgres — the dev database would be *more* permissive than the
+    target, which is the wrong way round for a database used to write tests.
+    """
+
+    @event.listens_for(engine, "connect")
+    def _set_pragma(dbapi_connection, _record):  # pragma: no cover - driver hook
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
 
 def build_session_factory(engine: Engine) -> sessionmaker[Session]:
