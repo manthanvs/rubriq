@@ -17,6 +17,7 @@ from __future__ import annotations
 import os
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from core.errors import RubriQError
@@ -26,6 +27,18 @@ DEFAULT_EMAIL_DOMAIN = "pccoepune.org"
 #: Checked in order, first non-empty wins. ``DATABASE_URL`` is the fallback
 #: because most hosting providers set that name for you.
 DATABASE_URL_ENV_KEYS = ("RUBRIQ_DATABASE_URL", "DATABASE_URL")
+
+#: The repository root — this file is ``<root>/core/config.py``.
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+#: Where the database lives when nothing says otherwise.
+#:
+#: Absolute rather than ``sqlite:///rubriq.db`` on purpose: a relative URL is
+#: resolved against the current working directory, so running Streamlit from
+#: the repo root and Alembic from somewhere else would quietly produce two
+#: different databases and a migration that appears not to have applied.
+DEFAULT_DATABASE_PATH = REPO_ROOT / "rubriq.db"
+DEFAULT_DATABASE_URL = f"sqlite:///{DEFAULT_DATABASE_PATH.as_posix()}"
 
 
 class ConfigError(RubriQError, RuntimeError):
@@ -54,9 +67,11 @@ class Settings:
 
     def __post_init__(self) -> None:
         if not self.database_url.strip():
+            # Both constructors fall back to DEFAULT_DATABASE_URL, so reaching
+            # here means someone built Settings directly with a blank URL.
             raise ConfigError(
-                "No database URL configured. Set [database] url in "
-                ".streamlit/secrets.toml, or RUBRIQ_DATABASE_URL in the environment."
+                "No database URL configured. Leave [database] url unset to use "
+                "the default SQLite file, or set RUBRIQ_DATABASE_URL."
             )
         if not self.allowed_email_domain.strip():
             raise ConfigError("allowed_email_domain must not be empty (invariant #4).")
@@ -71,7 +86,7 @@ class Settings:
         llm = _section(raw, "llm")
 
         return cls(
-            database_url=str(database.get("url") or "").strip(),
+            database_url=str(database.get("url") or "").strip() or DEFAULT_DATABASE_URL,
             allowed_email_domain=str(
                 rubriq.get("allowed_email_domain") or DEFAULT_EMAIL_DOMAIN
             ).strip(),
@@ -94,7 +109,7 @@ class Settings:
                 break
 
         return cls(
-            database_url=url,
+            database_url=url or DEFAULT_DATABASE_URL,
             allowed_email_domain=(
                 env.get("RUBRIQ_EMAIL_DOMAIN") or DEFAULT_EMAIL_DOMAIN
             ).strip(),
@@ -109,12 +124,12 @@ class Settings:
 
     @property
     def dialect(self) -> str:
-        """``postgresql``, ``sqlite``, … — the scheme without the driver."""
+        """``sqlite`` — the scheme without the driver."""
         return self.database_url.split(":", 1)[0].split("+", 1)[0].lower()
 
     @property
-    def is_postgres(self) -> bool:
-        return self.dialect.startswith("postgres")
+    def is_sqlite(self) -> bool:
+        return self.dialect == "sqlite"
 
     @property
     def has_llm(self) -> bool:

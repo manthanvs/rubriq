@@ -11,8 +11,11 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# Local databases
+# The database. SQLite in WAL mode keeps two sidecar files beside it
+# (-wal, -shm); none of the three belong in version control.
 *.db
+*.db-wal
+*.db-shm
 *.sqlite3
 
 # Student uploads live outside version control

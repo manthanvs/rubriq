@@ -45,14 +45,11 @@ def _database_url() -> str:
 def render_item(type_, obj, autogen_context) -> str | bool:
     """Keep dialect-specific SQL out of generated migrations.
 
-    Autogenerate serialises a ``server_default`` as whatever the *connected*
-    dialect compiles it to. Run against SQLite, ``func.now()`` is written into
-    the migration file as the literal ``sa.text('(CURRENT_TIMESTAMP)')`` — and
-    that file then has to run on Postgres, which is the real target.
-
-    This bit twice by hand before it was worth automating. Returning the
-    symbolic form instead means a migration generated on the dev machine is
-    the same migration that runs in production.
+    Autogenerate serialises a ``server_default`` as whatever the connected
+    dialect compiles it to, so ``func.now()`` is written into the migration as
+    the literal ``sa.text('(CURRENT_TIMESTAMP)')``. Returning the symbolic form
+    keeps migrations readable and keeps them portable, which matters for the
+    report: a migration file is an SDLC artifact people read, not just run.
 
     Returning ``False`` falls back to alembic's default rendering.
     """
@@ -88,9 +85,11 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             compare_type=True,
-            # SQLite cannot ALTER most things in place; batch mode rewrites the
-            # table instead. Harmless on Postgres, essential for local dev.
-            render_as_batch=connection.dialect.name == "sqlite",
+            # SQLite cannot ALTER most columns in place — it has no
+            # DROP COLUMN worth the name and no ALTER COLUMN at all. Batch mode
+            # makes alembic rebuild the table and copy the rows instead, which
+            # is the only way later phases will be able to change a column.
+            render_as_batch=True,
             render_item=render_item,
         )
 

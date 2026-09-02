@@ -33,10 +33,10 @@ def utc_now() -> datetime:
 def ensure_utc(value: datetime | None) -> datetime | None:
     """Attach UTC to a naive datetime read back from the database.
 
-    Postgres ``timestamptz`` round-trips an aware datetime; SQLite does not,
-    and hands back a naive one. Subtracting the two raises ``TypeError``, so
-    every datetime that comes *out* of the database passes through here before
-    it is compared to anything.
+    ``core.db.types.UtcDateTime`` already does this for every mapped column,
+    so this is the belt to that braces: it covers datetimes that arrive from
+    a raw SQL query, a fixture, or a caller, where the ORM type never ran.
+    SQLite has no aware type of its own, so a naive value here means UTC.
     """
     if value is None:
         return None

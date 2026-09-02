@@ -1,8 +1,9 @@
 """Shared fixtures.
 
-The suite has no external dependency: everything runs against SQLite. Postgres
-behaviour is proved by running the migrations against a real database, not by
-the unit tests.
+Every test runs against SQLite, which is also what the application runs
+against (decision #8) — so unlike the usual arrangement, the test database and
+the real one behave identically. Tests use a temporary file rather than the
+repository's ``rubriq.db``.
 """
 
 from __future__ import annotations

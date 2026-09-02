@@ -33,7 +33,7 @@ Streamlit-only is a legitimate choice here and it will get you to a demo far fas
 |---|---|
 | Whole script reruns on every interaction | All state in `st.session_state`; all DB reads through `@st.cache_data` with explicit invalidation; never do work at module top level |
 | No URL routing or deep links | `st.navigation` with role-filtered page lists; accept that "share a link to this student's review" is out of scope |
-| No native calendar widget | `streamlit-calendar` component; fallback is a grouped agenda table. Decide in Phase 2 |
+| No native calendar widget | A sorted agenda table, shared by both roles (decision #3). No third-party component |
 | Grid + detail drawer UX is awkward | `st.data_editor` for the grid, `st.dialog` for the evidence drawer. Do not attempt a custom component |
 | Long AI calls block the session | Chunk into per-submission calls inside `st.status`, persist each result immediately so a refresh never loses work |
 | Weak client-side permission story | **All scoping happens in SQL queries, never in the UI.** A student's query never selects another student's row in the first place |
@@ -65,14 +65,14 @@ If a task appears to require breaking one, stop and ask.
 |---|---|---|
 | App | Streamlit ≥ 1.42 | Single-process, multipage via `st.navigation`; 1.42 is the floor for native OIDC |
 | Auth | `st.login()` / `st.user` with Google OIDC | No password handling; `hd=pccoepune.org` as client kwarg + server-side email-domain assertion |
-| DB | PostgreSQL 16 via SQLAlchemy 2.0 | Real concurrency for multi-user demo; JSONB for AI payloads. SQLite acceptable for local dev only |
+| DB | **SQLite** via SQLAlchemy 2.0 | Decision #8. No server to install, no credentials, and the database is a file you can copy into the report appendix. Configured with WAL + `busy_timeout` + `foreign_keys=ON` in `core/db/engine.py` — the defaults are not enough for a multi-user Streamlit app. Swapping engines later is a URL change because nothing outside `core/db/` knows the dialect |
 | Migrations | Alembic | Migration history is an SDLC artifact — do not skip it |
 | Validation | Pydantic v2 | AI response schema enforcement |
 | File parsing | `pdfplumber`, `python-docx` | Text extraction at upload time |
-| AI orchestration | **LangGraph** (+ `langgraph-checkpoint-postgres`) | The evaluation flow is genuinely a graph with conditional retry edges; the Postgres checkpointer also solves Streamlit's rerun-loses-progress problem. See §6.2 |
+| AI orchestration | **LangGraph** (+ `langgraph-checkpoint-sqlite`) | The evaluation flow is genuinely a graph with conditional retry edges; the checkpointer also solves Streamlit's rerun-loses-progress problem. `SqliteSaver`, not `PostgresSaver` — see §6.2 |
 | AI model | One provider behind `core/ai/provider.py` (Gemini or Groq) | Swappable; never import an SDK outside this module |
 | Export | `openpyxl` | Real `.xlsx`, not a CSV rename |
-| Calendar | `streamlit-calendar` (decision #2) | Fallback: agenda table |
+| Calendar | Agenda table in `app/components/calendar.py` | Decision #3. No dependency; both roles call one function |
 | Tests | `pytest` | Testing `core/` is easy precisely because it has no Streamlit in it |
 
 **Do not add:** Celery, Redis, Docker orchestration, custom React components, a separate FastAPI service, a vector store, or LangChain retrievers/agents/tools. LangGraph is in for orchestration only — pulling in the wider LangChain ecosystem is how this project doubles in size without getting better.
@@ -97,7 +97,7 @@ ProjectCycle (subject_id, title, academic_year)
   └── Submission (milestone_id, student_email, submitted_at,
                   files[], text_extract, version, status)
         └── Evaluation (submission_id, version, engine: AI|MANUAL, status,
-                        model_name, prompt_version, raw_response JSONB, created_at)
+                        model_name, prompt_version, raw_response JSON, created_at)
               └── CriterionScore (evaluation_id, criterion_id, score, confidence,
                                   evidence_span, verdict, rationale)
 
@@ -105,12 +105,12 @@ ScoreSheet (submission_id, base_total, penalty, final_total, attendance_status,
             approved_by, approved_at, faculty_note)
   └── ScoreOverride (score_sheet_id, criterion_id, old, new, reason, by, at)
 
-LatePolicy (scope: SUBJECT|MILESTONE, scope_id, rules JSONB, version)
+LatePolicy (scope: SUBJECT|MILESTONE, scope_id, rules JSON, version)
 
 StudentQuery (student_email, milestone_id?, question, ai_answer, sources[],
               escalated: bool, faculty_reply?, replied_by?, replied_at?)
 
-AuditLog (actor_email, action, entity, entity_id, payload JSONB, at)
+AuditLog (actor_email, action, entity, entity_id, payload JSON, at)
 ```
 
 **Notes**
@@ -172,7 +172,7 @@ These are **synchronous wrappers** over compiled LangGraph graphs. Callers never
 LangGraph earns its place for exactly two reasons, and you should be able to say both in the viva:
 
 1. **The evaluation flow has real conditional edges.** Parse → validate schema → verify evidence → repair-and-retry → aggregate is a state machine with two failure loops, not a linear chain. Expressing it as a graph makes the retry policy explicit and inspectable instead of buried in nested `try/except`.
-2. **Checkpointing solves a Streamlit problem.** `PostgresSaver` persists graph state per `thread_id`. When Streamlit reruns the script mid-evaluation, the graph resumes from its last completed node instead of restarting. This is the cleanest available answer to Streamlit's biggest weakness in this app.
+2. **Checkpointing solves a Streamlit problem.** `SqliteSaver` persists graph state per `thread_id`. When Streamlit reruns the script mid-evaluation, the graph resumes from its last completed node instead of restarting. This is the cleanest available answer to Streamlit's biggest weakness in this app. Keep the checkpointer's database file separate from `rubriq.db` so a corrupt graph checkpoint can be deleted without touching a single mark.
 
 **Where LangGraph must not go — non-negotiable:**
 
@@ -278,7 +278,7 @@ classify ──▶ in_scope? ──yes──▶ answer ──▶ confidence_chec
 - System prompt: return **only** JSON, no prose, no code fences.
 - `NO_EVIDENCE` forces `score = 0` **and** flags the criterion for mandatory faculty attention.
 - **Anti-hallucination guard:** reject any `evidence` that doesn't fuzzy-match (`rapidfuzz.partial_ratio ≥ 90`) into `text_extract`. Log every rejection. The rejection rate is your strongest empirical result and belongs in the report.
-- Store `raw_response` verbatim in JSONB whatever happens.
+- Store `raw_response` verbatim in the JSON column whatever happens.
 - Tag every `Evaluation` with `prompt_version` **and** `graph_version` so results are reproducible.
 
 ### 6.6 Running it inside Streamlit
@@ -376,7 +376,7 @@ rubriq/
 │   ├── ai/                    ← the ONLY place langgraph/LLM SDKs may be imported
 │   │   ├── provider.py        ← sync wrappers; the public face of this package
 │   │   ├── graphs/            ← evaluation.py, query.py, state.py
-│   │   ├── checkpoint.py      ← PostgresSaver setup, thread_id helpers
+│   │   ├── checkpoint.py      ← SqliteSaver setup, thread_id helpers
 │   │   ├── prompts/           ← versioned, one file per prompt
 │   │   ├── schemas.py         ← Pydantic response models
 │   │   └── guards.py          ← evidence verification, rejection logging
@@ -403,7 +403,7 @@ rubriq/
 Ordered so **Phase 4 is a complete, demonstrable Review 1** and **Phase 7 is Review 2**. Don't start a phase until the previous one's exit criteria pass.
 
 ### Phase 0 — Foundation
-- Streamlit app boots, Postgres connection, Alembic initialised, settings from `st.secrets`
+- Streamlit app boots, SQLite connection, Alembic initialised, settings from `st.secrets`
 - `core/` package with the no-Streamlit rule enforced by a test that greps for the import
 - `pytest` wired, one passing smoke test
 - **Exit:** `make run` serves a hello page; `make test` green; the no-Streamlit-in-core test exists and passes
@@ -442,7 +442,7 @@ Split into two sub-phases. Do not build the graph first.
 - **Exit:** guard correctly rejects fabricated evidence on a fixture, with no LangGraph installed yet
 
 **5b — graph, checkpointing, UI**
-- `core/ai/graphs/evaluation.py` per §6.3, `PostgresSaver` wired, `thread_id` scheme
+- `core/ai/graphs/evaluation.py` per §6.3, `SqliteSaver` wired, `thread_id` scheme
 - `stream_evaluation` generator; `st.status` runner with per-submission persistence
 - Evidence dialog, override-with-reason, approval workflow, `FAILED` state surfaced
 - **Exit:** run over 10 seeded submissions; refresh the browser mid-run and confirm the resumed run makes **no duplicate LLM calls**; rejection count logged and reportable; every score traces to a span in the source text
@@ -512,6 +512,7 @@ The guidelines demand all SDLC components. These are tasks, not afterthoughts.
 | 5 | Individual or group | solo vs modular split | affects §11 module-ownership section |
 | 6 | Submission types | PDF/DOCX only, or also GitHub URL | PDF/DOCX for Phase 3; URL is a Phase 7 stretch |
 | 7 | Guide approval | title + synopsis sign-off from Dr. Arakerimath | **do before Phase 1** |
+| 8 | Database engine | PostgreSQL 16 vs SQLite | ✅ **SQLite** — decided during Phase 2, superseding §3's original choice. Postgres bought real concurrency and JSONB, neither of which this project needs: a single-guide review panel has no write contention worth a server, and every JSON column is read by primary key rather than searched by content. Against that, it cost an install, a service, and credentials on every machine the project has to run on — including whichever one the viva happens on. SQLite makes the database a file that can be copied, inspected, and shipped with the report. The engine is tuned rather than left on defaults (WAL, `busy_timeout`, `foreign_keys=ON`); see `core/db/engine.py`. **Limits, stated honestly:** one writer at a time, so this would not survive a real cohort submitting simultaneously — that belongs in §11's limitations, not hidden. Reversing it is a URL change plus reinstating `psycopg`, because nothing outside `core/db/` knows the dialect. |
 
 ---
 

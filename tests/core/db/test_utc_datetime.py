@@ -3,8 +3,8 @@
 Regression test for a bug that reached the screen: a milestone entered as
 ``23:59 IST`` came back rendered as ``05:29`` the next morning, because SQLite
 stored the wall-clock time and threw the ``+05:30`` away rather than
-converting it. Postgres would have been correct, so this was invisible to
-every test that did not actually go through the database.
+converting it. SQLite has no timezone-aware type — it stores the string it is
+given — so nothing catches this except a test that goes through the database.
 
 It matters beyond cosmetics: §5.1 computes days-late from these columns, so a
 deadline drifting by 5½ hours changes who is recorded as late — fix item 1.

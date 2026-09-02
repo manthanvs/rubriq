@@ -1,15 +1,11 @@
-"""Phase 0 smoke tests: settings parse, engine connects, transactions roll back.
-
-These run against in-memory SQLite so the suite has no external dependency.
-The Postgres path is exercised by ``make migrate`` against a real database.
-"""
+"""Phase 0 smoke tests: settings parse, engine connects, transactions roll back."""
 
 from __future__ import annotations
 
 import pytest
 from sqlalchemy import text
 
-from core.config import ConfigError, Settings
+from core.config import DEFAULT_DATABASE_URL, ConfigError, Settings
 from core.db.engine import (
     build_engine,
     build_session_factory,
@@ -23,20 +19,39 @@ def test_settings_from_env_reads_the_database_url() -> None:
 
     assert settings.database_url == "sqlite://"
     assert settings.dialect == "sqlite"
-    assert settings.is_postgres is False
+    assert settings.is_sqlite is True
 
 
 def test_settings_falls_back_to_plain_database_url() -> None:
-    settings = Settings.from_env({"DATABASE_URL": "postgresql+psycopg://u:p@h/db"})
+    settings = Settings.from_env({"DATABASE_URL": "sqlite:///elsewhere.db"})
 
-    assert settings.is_postgres is True
+    assert settings.database_url == "sqlite:///elsewhere.db"
 
 
-def test_settings_without_a_url_fails_with_an_actionable_message() -> None:
-    with pytest.raises(ConfigError) as excinfo:
-        Settings.from_env({})
+def test_no_configuration_at_all_still_produces_a_working_database() -> None:
+    """Decision #8: SQLite means there is nothing to install or configure."""
+    assert Settings.from_env({}).database_url == DEFAULT_DATABASE_URL
+    assert Settings.from_mapping({}).database_url == DEFAULT_DATABASE_URL
 
-    assert "RUBRIQ_DATABASE_URL" in str(excinfo.value)
+
+def test_the_default_database_url_is_absolute() -> None:
+    """A relative URL resolves against the working directory.
+
+    Streamlit launched from the repo root and Alembic launched from elsewhere
+    would then use two different files, and the migration would look like it
+    never applied.
+    """
+    assert DEFAULT_DATABASE_URL.startswith("sqlite:///")
+    tail = DEFAULT_DATABASE_URL.removeprefix("sqlite:///")
+
+    assert tail.endswith("rubriq.db")
+    assert ":" in tail or tail.startswith("/"), f"not an absolute path: {tail}"
+
+
+def test_a_blank_url_is_still_rejected() -> None:
+    """The constructors default it, so a blank means someone passed one."""
+    with pytest.raises(ConfigError):
+        Settings(database_url="   ")
 
 
 def test_settings_from_mapping_reads_secrets_sections() -> None:
@@ -59,15 +74,11 @@ def test_settings_tolerates_missing_optional_sections() -> None:
     assert settings.has_llm is False
 
 
-def test_redacted_never_leaks_the_password_or_the_api_key() -> None:
-    settings = Settings(
-        database_url="postgresql+psycopg://rubriq:hunter2@localhost:5432/rubriq",
-        llm_api_key="sk-secret",
-    )
+def test_redacted_never_leaks_the_api_key() -> None:
+    settings = Settings(database_url="sqlite://", llm_api_key="sk-secret")
 
     facts = settings.redacted()
 
-    assert "hunter2" not in facts["database_url"]
     assert "sk-secret" not in str(facts)
     assert facts["llm_api_key_present"] is True
 

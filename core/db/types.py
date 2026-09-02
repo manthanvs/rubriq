@@ -1,7 +1,8 @@
-"""Column types that differ between the target database and the dev one.
+"""Custom column types.
 
-Postgres is the target (§3) and SQLite is permitted for local development.
-Declaring the difference once, here, keeps every model free of dialect checks.
+SQLite is the database (decision #8). These types exist because SQLite's
+defaults are not what this application needs, not because two dialects have to
+be reconciled.
 """
 
 from __future__ import annotations
@@ -9,11 +10,15 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from sqlalchemy import JSON, DateTime, TypeDecorator
-from sqlalchemy.dialects.postgresql import JSONB
 
-#: JSONB on Postgres — indexable, which matters for AuditLog and for the
-#: raw_response payloads in Phase 5 — and plain JSON on SQLite.
-JSONVariant = JSON().with_variant(JSONB(), "postgresql")
+#: JSON payloads — ``AuditLog.payload`` now, ``Evaluation.raw_response`` from
+#: Phase 5. SQLite stores JSON as text and SQLAlchemy handles the
+#: serialisation, so values round-trip as Python dicts either way.
+#:
+#: SQLite cannot index *inside* a JSON document the way Postgres JSONB can. It
+#: does not need to here: every JSON column is read by primary key or by an
+#: indexed column beside it, never searched by its contents.
+JSONColumn = JSON()
 
 
 class UtcDateTime(TypeDecorator):
@@ -25,14 +30,14 @@ class UtcDateTime(TypeDecorator):
     back as naive, assumed to be UTC, and rendered as ``05:29`` the next
     morning — the offset applied twice.
 
-    Postgres ``timestamptz`` converts on the way in, so the same code was
-    correct there and wrong on the dev database. That asymmetry is the danger:
-    §5.1's late-penalty boundary is computed from these columns, so a deadline
-    that drifts by 5½ hours silently changes who is marked late.
+    SQLite has no timezone-aware type at all: it stores whatever string it is
+    given. So the conversion has to happen here, in Python, on the way in and
+    on the way out. §5.1's late-penalty boundary is computed from these
+    columns, and a deadline that drifts by 5½ hours silently changes who is
+    marked late.
 
-    Normalising here rather than in each service means no caller has to
-    remember, and a naive datetime is rejected loudly instead of being guessed
-    at.
+    A naive datetime is rejected loudly rather than guessed at, because
+    guessing is exactly how the original bug happened.
     """
 
     impl = DateTime(timezone=True)
@@ -54,5 +59,4 @@ class UtcDateTime(TypeDecorator):
         if value is None:
             return None
 
-        # Postgres hands back an aware value; SQLite does not.
         return value if value.tzinfo is not None else value.replace(tzinfo=UTC)

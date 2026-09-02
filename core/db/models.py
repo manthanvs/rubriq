@@ -38,7 +38,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from core.auth.roles import Role
 from core.clock import utc_now
-from core.db.types import JSONVariant, UtcDateTime
+from core.db.types import JSONColumn, UtcDateTime
 
 
 class Base(DeclarativeBase):
@@ -57,7 +57,7 @@ class User(Base):
     (invariant #5).
     """
 
-    __tablename__ = "users"  # not "user" — reserved word in Postgres
+    __tablename__ = "users"  # "user" is a reserved word in several engines
 
     email: Mapped[str] = mapped_column(String(320), primary_key=True)
     role: Mapped[Role] = mapped_column(
@@ -102,7 +102,7 @@ class AuditLog(Base):
     action: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
     entity: Mapped[str] = mapped_column(String(80), nullable=False)
     entity_id: Mapped[str | None] = mapped_column(String(120), index=True)
-    payload: Mapped[dict[str, Any] | None] = mapped_column(JSONVariant)
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSONColumn)
     at: Mapped[datetime] = mapped_column(
         UtcDateTime(),
         nullable=False,

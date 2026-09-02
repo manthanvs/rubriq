@@ -2,6 +2,13 @@
 
 This is the only module that constructs a SQLAlchemy engine. Services take a
 ``Session``; they never reach for a global connection.
+
+**SQLite is the database** (decision #8), not a stand-in for one. That changes
+what this module owes it: a default SQLite connection is tuned for a
+single-process script, and RubriQ is a multi-user Streamlit app that reruns
+its script on every widget interaction. The pragmas in
+:func:`_configure_sqlite` are what make that safe, and each is there for a
+reason stated inline.
 """
 
 from __future__ import annotations
@@ -15,6 +22,11 @@ from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from core.config import Settings
+
+#: How long a blocked writer waits for the lock before raising
+#: "database is locked". Streamlit reruns can overlap, and a demo that throws
+#: because two clicks landed together is worse than one that waits 5 seconds.
+SQLITE_BUSY_TIMEOUT_SECONDS = 5.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,42 +43,61 @@ class DbHealth:
 
 
 def build_engine(settings: Settings) -> Engine:
-    """Create the engine for ``settings.database_url``.
-
-    Postgres gets ``pool_pre_ping`` because a Streamlit session can sit idle
-    long enough for the server to drop the connection underneath it. SQLite
-    gets ``check_same_thread=False`` because Streamlit runs script reruns on
-    worker threads.
-    """
+    """Create the engine for ``settings.database_url``."""
     kwargs: dict[str, Any] = {"echo": settings.echo_sql, "future": True}
 
-    if settings.dialect == "sqlite":
-        kwargs["connect_args"] = {"check_same_thread": False}
-    else:
-        kwargs["pool_pre_ping"] = True
+    if settings.is_sqlite:
+        kwargs["connect_args"] = {
+            # Streamlit runs script reruns on worker threads, and a connection
+            # from the pool may be handed to a different one than opened it.
+            "check_same_thread": False,
+            # Applies the busy timeout to the very first statement, before the
+            # PRAGMA below could have run.
+            "timeout": SQLITE_BUSY_TIMEOUT_SECONDS,
+        }
 
     engine = create_engine(settings.database_url, **kwargs)
 
-    if settings.dialect == "sqlite":
-        _enforce_sqlite_foreign_keys(engine)
+    if settings.is_sqlite:
+        _configure_sqlite(engine)
 
     return engine
 
 
-def _enforce_sqlite_foreign_keys(engine: Engine) -> None:
-    """Turn on foreign-key enforcement for SQLite connections.
+def _configure_sqlite(engine: Engine) -> None:
+    """Apply the pragmas that make SQLite behave for this workload.
 
-    SQLite ignores foreign keys unless asked not to, per connection. Without
-    this, an insert referencing a missing parent row succeeds locally and
-    fails on Postgres — the dev database would be *more* permissive than the
-    target, which is the wrong way round for a database used to write tests.
+    These run per connection, on connect, because SQLite scopes most pragmas
+    to the connection rather than the database file.
     """
 
     @event.listens_for(engine, "connect")
-    def _set_pragma(dbapi_connection, _record):  # pragma: no cover - driver hook
+    def _set_pragmas(dbapi_connection, _record):  # pragma: no cover - driver hook
         cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
+        try:
+            # SQLite ignores foreign keys unless asked not to — per connection.
+            # Without this an insert referencing a missing parent succeeds, so
+            # the database used to write tests is more permissive than the one
+            # running the demo. This already caught one real ordering bug.
+            cursor.execute("PRAGMA foreign_keys=ON")
+
+            # Write-ahead logging: readers no longer block the writer and the
+            # writer no longer blocks readers. With the default rollback
+            # journal, one faculty member saving a score sheet would stall
+            # every student's page load.
+            cursor.execute("PRAGMA journal_mode=WAL")
+
+            # Safe specifically *because* of WAL: a crash can lose the last
+            # transaction but cannot corrupt the file. The alternative, FULL,
+            # fsyncs on every commit and is needlessly slow here.
+            cursor.execute("PRAGMA synchronous=NORMAL")
+
+            # Belt and braces with connect_args["timeout"], and it also covers
+            # connections handed out by the pool.
+            timeout_ms = int(SQLITE_BUSY_TIMEOUT_SECONDS * 1000)
+            cursor.execute(f"PRAGMA busy_timeout={timeout_ms}")
+        finally:
+            cursor.close()
 
 
 def build_session_factory(engine: Engine) -> sessionmaker[Session]:

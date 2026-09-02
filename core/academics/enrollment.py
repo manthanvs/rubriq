@@ -282,9 +282,9 @@ def commit_enrollment_import(
     # foreign key fails.
     #
     # Flushing the users explicitly makes the ordering ours rather than
-    # SQLAlchemy's. This is caught by the tests only because SQLite foreign
-    # keys are switched on in build_engine; with them off it fails on Postgres
-    # instead, in front of an audience.
+    # SQLAlchemy's. The tests catch this only because build_engine switches
+    # SQLite foreign keys on; with them off, SQLite accepts the orphaned row
+    # and the roll quietly contains enrollments pointing at no user.
     for row in preview.committable:
         user = session.get(User, row.email)
         if user is None:
