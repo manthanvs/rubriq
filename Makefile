@@ -11,12 +11,13 @@
 PY ?= python
 PIP := $(PY) -m pip
 
-.PHONY: help install run test lint fmt migrate revision seed-faculty seed reseed
+.PHONY: help install run test test-report lint fmt migrate revision seed-faculty seed reseed
 
 help:
 	@echo "install   - install requirements.txt"
 	@echo "run       - start the Streamlit app"
 	@echo "test      - run pytest"
+	@echo "test-report - write docs/test-report.txt, an SDLC artifact"
 	@echo "lint      - ruff check"
 	@echo "fmt       - ruff format + fix imports"
 	@echo "migrate   - alembic upgrade head"
@@ -33,6 +34,11 @@ run:
 
 test:
 	$(PY) -m pytest
+
+# The verbose run is checked in, because "the tests pass" is a claim and
+# docs/test-report.txt is the evidence for it.
+test-report:
+	$(PY) -m pytest -o addopts="--strict-markers" -v --tb=short > docs/test-report.txt
 
 lint:
 	$(PY) -m ruff check core app tests alembic scripts

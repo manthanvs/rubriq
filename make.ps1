@@ -7,7 +7,7 @@
 
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('help', 'install', 'run', 'test', 'lint', 'fmt', 'migrate', 'revision', 'seed-faculty', 'seed', 'reseed')]
+    [ValidateSet('help', 'install', 'run', 'test', 'test-report', 'lint', 'fmt', 'migrate', 'revision', 'seed-faculty', 'seed', 'reseed')]
     [string]$Target = 'help',
 
     [string]$M
@@ -31,6 +31,7 @@ switch ($Target) {
         'install   - install requirements.txt'
         'run       - start the Streamlit app'
         'test      - run pytest'
+        'test-report - write docs/test-report.txt, an SDLC artifact'
         'lint      - ruff check'
         'fmt       - ruff format + fix imports'
         'migrate   - alembic upgrade head'
@@ -44,6 +45,12 @@ switch ($Target) {
     'install'  { Invoke-Py @('-m', 'pip', 'install', '-r', 'requirements.txt') }
     'run'      { Invoke-Py @('-m', 'streamlit', 'run', 'app/main.py') }
     'test'     { Invoke-Py @('-m', 'pytest') }
+    'test-report' {
+        # The verbose run is checked in, because "the tests pass" is a claim
+        # and docs/test-report.txt is the evidence for it.
+        & $py -m pytest -o addopts="--strict-markers" -v --tb=short |
+            Out-File -FilePath 'docs/test-report.txt' -Encoding utf8
+    }
     'lint'     { Invoke-Py @('-m', 'ruff', 'check', 'core', 'app', 'tests', 'alembic', 'scripts') }
     'fmt' {
         Invoke-Py @('-m', 'ruff', 'check', '--fix', 'core', 'app', 'tests', 'alembic', 'scripts')

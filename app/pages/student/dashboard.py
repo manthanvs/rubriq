@@ -53,7 +53,7 @@ st.subheader("Your subjects")
 st.dataframe(
     [{"Code": s.code, "Name": s.name, "Sem": s.semester} for s in subjects],
     hide_index=True,
-    use_container_width=True,
+    width="stretch",
 )
 
 st.subheader("Deadlines")

@@ -91,7 +91,7 @@ def render_roll(subject: SubjectDTO) -> None:
             for e in roll
         ],
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
     )
     st.caption(f"{len(roll)} student(s) enrolled.")
 
@@ -242,7 +242,7 @@ def render_import(subject: SubjectDTO) -> None:
             for row in preview.rows
         ],
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
     )
 
     if preview.rejected:

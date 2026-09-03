@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from app.components.lateness import consequence_text
 from app.components.rubric_view import render_rubric, render_version_badge
 from app.context import current_actor, db, get_settings
 from app.state import flash, invalidate
@@ -21,17 +22,26 @@ from core.academics.milestones import list_milestones
 from core.clock import ist_date, to_ist, utc_now
 from core.errors import RubriQError
 from core.rubrics.service import published_rubric_for
+from core.scoring.sheets import policy_for_milestone
 from core.submissions.extract import ALLOWED_EXTENSIONS
 from core.submissions.service import list_submissions, submit
 
 
-def render_deadline(milestone: MilestoneDTO) -> None:
-    """State the deadline and, if it has passed, how far.
+def lateness_consequence(milestone: MilestoneDTO, days_late: int) -> str:
+    """What submitting right now actually costs, in the student's own terms.
 
-    The penalty *arithmetic* belongs to §5.1 and lands in Phase 4. What belongs
-    here now is that lateness is visible before the upload rather than
-    discovered afterwards (fix item 10).
+    The policy is read from the database rather than assumed, so a subject that
+    overrides §5.1 tells the student the truth about *its* rules. The wording
+    itself lives in ``app/components/lateness.py``, where it is testable.
     """
+    with db() as session:
+        policy = policy_for_milestone(actor, session, milestone_id=milestone.id)
+
+    return consequence_text(policy.band_for(days_late), milestone.max_marks)
+
+
+def render_deadline(milestone: MilestoneDTO) -> None:
+    """State the deadline and, if it has passed, what submitting now costs."""
     due = to_ist(milestone.due_at)
     days = (ist_date(milestone.due_at) - ist_date(utc_now())).days
 
@@ -50,8 +60,8 @@ def render_deadline(milestone: MilestoneDTO) -> None:
         late = abs(days)
         st.error(
             f"This deadline passed {late} day(s) ago "
-            f"({due.strftime('%d %b %Y, %I:%M %p')} IST). You can still submit, and "
-            "a late penalty will apply to the milestone total.",
+            f"({due.strftime('%d %b %Y, %I:%M %p')} IST). You can still submit. "
+            + lateness_consequence(milestone, late),
             icon=":material/running_with_errors:",
         )
 
@@ -76,7 +86,7 @@ def render_history(milestone: MilestoneDTO) -> None:
             for s in history
         ],
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
     )
 
     st.caption(

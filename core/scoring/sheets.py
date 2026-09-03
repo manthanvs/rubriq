@@ -70,6 +70,21 @@ def _policy_for(session: Session, milestone: ReviewMilestone) -> LatePolicy:
     return DEFAULT_LATE_POLICY
 
 
+def policy_for_milestone(
+    actor: Actor, session: Session, *, milestone_id: int
+) -> LatePolicy:
+    """The late policy in force for one milestone.
+
+    Public because the student's Submit page has to state the consequence of
+    submitting now *before* they confirm (fix item 10), and it must state the
+    same policy the scoring engine will later apply — not a hard-coded default
+    that drifts the moment a subject overrides one.
+    """
+    milestone = get_milestone(actor, session, milestone_id)  # authorisation
+    row = session.get(ReviewMilestone, milestone.id)
+    return _policy_for(session, row)
+
+
 def _load_for_grading(
     actor: Actor, session: Session, submission_id: int
 ) -> tuple[Submission, ReviewMilestone]:

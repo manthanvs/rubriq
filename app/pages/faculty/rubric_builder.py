@@ -234,5 +234,5 @@ if len(history) > 1:
                 for r in history
             ],
             hide_index=True,
-            use_container_width=True,
+            width="stretch",
         )

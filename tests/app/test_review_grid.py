@@ -196,9 +196,7 @@ class TestCellRendering:
         assert frame.iloc[0]["Days Late"] == "0"
 
     def test_an_overridden_mark_is_not_labelled_as_the_model(self) -> None:
-        frame = build_frame(
-            (row(engine=EvaluationEngine.AI, override_count=1),), ("C1",)
-        )
+        frame = build_frame((row(engine=EvaluationEngine.AI, override_count=1),), ("C1",))
 
         assert frame.iloc[0]["By"] == "OVERRIDDEN"
 

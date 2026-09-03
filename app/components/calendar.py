@@ -92,7 +92,7 @@ def render_agenda(
         frame,
         column_config=columns,
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
     )
 
 

@@ -337,6 +337,9 @@ Build the page list from `st.user` role. A student's page objects are never cons
 5. `Review Grid` — §7. The centrepiece; demo this first in both reviews
 6. `Query Inbox` — escalated student questions
 7. `Reports` — score distribution, criterion-level weak-spot chart
+8. `Activity` — the audit trail, filterable. **Not in this list originally**;
+   added in Phase 7 because fix item 15 asks for a filterable view and §8 gave
+   it nowhere to live. `tests/core/auth/test_pages.py` records the difference
 
 **Student**
 1. `Dashboard` — my subjects, next deadline with countdown, submission status chips
@@ -454,7 +457,7 @@ If 5b runs into trouble, 5a alone still gives you working AI evaluation — the 
 - Student feedback view gated on approval
 - **Exit:** the assistant correctly refuses an out-of-scope question and offers escalation instead of guessing
 
-### Phase 7 — Reports & hardening ⟵ **REVIEW 2 DEMO**
+### Phase 7 — Reports & hardening ⟵ **REVIEW 2 DEMO** ✅
 - Distribution and weak-criterion charts
 - Empty states, spinners, error handling on every DB and AI call
 - `make seed` produces a realistic demo dataset in one command
@@ -467,15 +470,15 @@ If 5b runs into trouble, 5a alone still gives you working AI evaluation — the 
 
 The guidelines demand all SDLC components. These are tasks, not afterthoughts.
 
-- [ ] **Synopsis** — introduction, objectives, problem statement, scope with explicit in/out lists
-- [ ] **Requirement analysis** — functional + non-functional, numbered and traceable
-- [ ] **SRS** — assumptions, constraints, interfaces
-- [ ] **Design** — ER diagram, DFD L0 & L1, use-case diagram, architecture diagram showing the `core/` ↔ `app/` split, **and the evaluation state-transition diagram from §6.3** (this replaces a plain sequence diagram and is a stronger artifact — state machines with retry loops read well in a report)
-- [ ] **Implementation** — module-wise write-up; if this becomes a group project, the `core/` module boundaries are already your independent-module split
-- [ ] **Testing** — pytest report + a manual test-case table with expected vs actual
-- [ ] **Deployment** — local setup guide; note Streamlit Community Cloud as the deployment path and why it wasn't used for real data
-- [ ] **Report** — institute template
-- [ ] **Limitations & future scope** — be honest about AI confidence limits and Streamlit's single-process ceiling
+- [x] **Synopsis** → `docs/synopsis.md`
+- [x] **Requirement analysis** → `docs/requirements.md` (52 FR, 12 NFR, each traced to a module and a test)
+- [x] **SRS** → `docs/srs.md`
+- [x] **Design** → `docs/design.md` + `docs/diagrams/` (ER, DFD L0/L1, use case, architecture, evaluation state machine — all Mermaid, so they diff)
+- [x] **Implementation** → `docs/implementation.md`
+- [x] **Testing** → `docs/test-cases.md` (manual table with actual results + a defect log) and `docs/test-report.txt` (`make test-report`)
+- [x] **Deployment** → `docs/deployment.md`
+- [ ] **Report** — institute template. `docs/report/` is the home; assemble from the eight documents above
+- [x] **Limitations & future scope** → `docs/limitations.md`
 
 **Declare out of scope in the synopsis** so it isn't ambushed in the viva: plagiarism detection, executing/compiling student code, mobile app, LMS integration, multi-institution tenancy, production cloud deployment, real-time collaborative editing.
 
@@ -644,16 +647,57 @@ These don't corrupt data. They make the system untrustworthy to operate, which i
 
 Do these in Phase 7. They are what makes the Review 2 demo feel finished, and none of them justify touching P0 code.
 
-#### 12. Review-grid readability
+#### 12. Review-grid readability — ✅ closed in Phase 7
+
 Freeze the identity columns. Criterion columns stay narrow with verdict glyphs (`✓ ~ ✗ ?`) and a visible legend — detail belongs in the `st.dialog`, not the grid. Set explicit widths in `column_config`; past roughly eight criteria, collapse the criterion block behind an expander rather than letting the table scroll sideways past the totals.
 
-#### 13. Empty/error states
+**Closed by:** table shaping moved to `app/components/review_grid.py`, where a
+test can import it. Identity columns pinned, every width explicit, criterion
+columns narrow with the criterion title as a tooltip, and past eight criteria
+the whole verdict block moves into its own table — all of it or none, because
+a table showing C1–C8 and hiding C9 reads as a bug. `Base`, `Penalty` and
+`Final` render through one text path: a null in a numeric column renders as
+the word `None`, which reads as a value.
+**Proof:** `tests/app/test_review_grid.py`.
+
+#### 13. Empty/error states — ✅ closed in Phase 7
+
 Every list gets a zero-state naming the next action ("No subjects yet — create one"). Every DB and AI call is wrapped and fails to a readable message, never a traceback. No page renders a blank region. Walk all twelve pages of §8 against an empty database as a checklist.
 
-#### 14. Session/cache invalidation
+**Closed by:** the walk, automated. `tests/app/test_empty_states.py` runs all
+thirteen pages against an empty schema through `AppTest` and asserts each one
+raises nothing, renders something, and names a next action. A checklist is a
+thing you forget to run.
+**Proof:** `tests/app/test_empty_states.py` — 13 pages × 3 assertions.
+
+#### 14. Session/cache invalidation — ✅ closed in Phase 7
+
 One `invalidate(*keys)` helper in `app/state.py`, called explicitly after every mutation; caching stays out of `core/` entirely. Long-running dialogs re-read before writing rather than trusting `session_state`.
+
+**Closed by:** `after_mutation(message)`, which collapses the
+invalidate/flash/rerun ritual so it cannot be got out of order, and
+`render_flash()` moving into the shell so a new page gets its confirmations
+without remembering anything. Two Subjects call sites were calling
+`st.success()` immediately before `st.rerun()` — drawn, then discarded, so the
+user was told nothing. The score drawer re-reads its row on every rerun
+instead of trusting the one captured when the grid rendered.
+
+**Deviation, recorded:** `invalidate()` takes no `*keys`. There is one version
+counter per session, so a bump expires everything this user cached whatever
+was named; a `*keys` parameter that changed nothing would read like surgical
+invalidation while doing the opposite. Add per-key counters the day a page is
+slow enough to need one, and not before.
 
 > **Split priority:** the *cache-key* half of this item is not polish. Every `@st.cache_data` key must include the actor's email — a cache shared across users is a cross-user data leak, which is item 3, P0, Phase 1. Only the invalidation ergonomics belong down here.
 
-#### 15. Audit/history presentation
+#### 15. Audit/history presentation — ✅ closed in Phase 7
+
 `AuditLog` is written from Phase 1 but read by nobody until here. Surface it: a history panel inside the score-sheet dialog (who changed what, when, and why), submission version history on the student's Submit page, and a filterable admin view. Render timestamps in IST. This is cheap to build and it is the artifact that answers "how do you know the faculty member, not the AI, decided this mark?"
+
+**Closed by:** all three surfaces. The score-sheet dialog has a History tab
+listing every override with its old value, new value, actor, time and reason;
+the student's Submit page lists every version; and `core/audit_read.py` plus a
+faculty **Activity** page give the filterable view. Timestamps in IST
+throughout. Activity is a thirteenth page §8 did not allocate — added
+deliberately, and the difference from the spec is recorded in
+`tests/core/auth/test_pages.py` rather than silently widened.

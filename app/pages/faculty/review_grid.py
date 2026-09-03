@@ -157,7 +157,7 @@ def score_drawer(row: GridRow, codes: tuple[str, ...], rubric, milestone_id: int
                     for e in entries
                 ],
                 hide_index=True,
-                use_container_width=True,
+                width="stretch",
             )
 
 
@@ -406,7 +406,7 @@ else:
     event = st.dataframe(
         build_frame(tuple(visible), inline_codes),
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
         on_select="rerun",
         selection_mode="single-row",
         column_config=grid_column_config(rubric, inline_codes),
@@ -418,7 +418,7 @@ else:
             st.dataframe(
                 build_criterion_frame(tuple(visible), codes),
                 hide_index=True,
-                use_container_width=True,
+                width="stretch",
                 column_config=grid_column_config(rubric, codes),
             )
 

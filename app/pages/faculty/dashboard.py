@@ -84,7 +84,7 @@ st.dataframe(
         for s in subjects
     ],
     hide_index=True,
-    use_container_width=True,
+    width="stretch",
 )
 
 st.subheader("Coming up")

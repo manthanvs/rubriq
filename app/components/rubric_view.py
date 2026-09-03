@@ -54,7 +54,7 @@ def render_rubric(
     st.dataframe(
         frame,
         hide_index=True,
-        use_container_width=True,
+        width="stretch",
         column_config={
             "Code": st.column_config.TextColumn(width="small"),
             "Criterion": st.column_config.TextColumn(width="medium"),

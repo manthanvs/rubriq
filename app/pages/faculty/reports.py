@@ -140,7 +140,7 @@ st.dataframe(
         for c in report.criteria
     ],
     hide_index=True,
-    use_container_width=True,
+    width="stretch",
 )
 
 st.subheader("How the cohort was recorded")
@@ -149,5 +149,5 @@ st.caption("Absent, reinstated and not-submitted are distinct outcomes (§5.1)."
 st.dataframe(
     [{"Outcome": k, "Students": v} for k, v in mix.items()],
     hide_index=True,
-    use_container_width=True,
+    width="stretch",
 )

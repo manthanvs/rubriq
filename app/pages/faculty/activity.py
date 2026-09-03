@@ -71,7 +71,7 @@ st.dataframe(
         for e in entries
     ],
     hide_index=True,
-    use_container_width=True,
+    width="stretch",
     column_config={
         "When (IST)": st.column_config.TextColumn(width="medium"),
         "Who": st.column_config.TextColumn(width="medium"),
