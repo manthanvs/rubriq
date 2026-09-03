@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import pytest
 
@@ -110,3 +111,56 @@ def world(db_factory) -> World:
             milestone_visible=visible.id,
             milestone_hidden=hidden.id,
         )
+
+
+@pytest.fixture
+def graded(db_factory, world, tmp_path):
+    """A published rubric and one submission, ready to be scored.
+
+    Phase 4 tests all need the same runway: a frozen rubric with known weights
+    and a student submission dated relative to the deadline. Building it once
+    here keeps each test about the thing it is actually asserting.
+    """
+    from core.rubrics.service import add_criterion, create_rubric, publish_rubric
+    from core.submissions.service import submit
+
+    with session_scope(db_factory) as session:
+        rubric = create_rubric(
+            world.faculty_a, session, milestone_id=world.milestone_visible
+        )
+        add_criterion(
+            world.faculty_a,
+            session,
+            rubric_id=rubric.id,
+            code="C1",
+            title="Problem statement",
+            weight=60,
+            max_score=10,
+            is_mandatory=True,
+        )
+        add_criterion(
+            world.faculty_a,
+            session,
+            rubric_id=rubric.id,
+            code="C2",
+            title="SRS completeness",
+            weight=40,
+            max_score=10,
+        )
+        published = publish_rubric(world.faculty_a, session, rubric_id=rubric.id)
+
+    with session_scope(db_factory) as session:
+        submission = submit(
+            world.student_1,
+            session,
+            milestone_id=world.milestone_visible,
+            files={"synopsis.txt": b"Objectives, scope and requirements."},
+            uploads_root=tmp_path / "uploads",
+        )
+
+    return SimpleNamespace(
+        rubric_id=published.id,
+        submission_id=submission.id,
+        milestone_id=world.milestone_visible,
+        uploads_root=tmp_path / "uploads",
+    )

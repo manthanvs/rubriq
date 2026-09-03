@@ -10,9 +10,11 @@ The §4 domain model lands one phase at a time. Present here:
 * ``ReviewMilestone`` — a dated review with marks attached (Phase 2)
 * ``Rubric`` / ``Criterion`` — versioned, frozen on publish (Phase 3)
 * ``Submission`` / ``SubmissionFile`` — versioned student work (Phase 3)
+* ``Evaluation`` / ``CriterionScore`` — one scoring run and its rows (Phase 4)
+* ``ScoreSheet`` / ``ScoreOverride`` — the approved mark and its history (Phase 4)
+* ``LatePolicyRow`` — a per-subject override of §5.1 (Phase 4)
 
-Evaluation, CriterionScore and ScoreSheet arrive in Phases 4-5. Every entity
-ships with its migration in the same commit (§12).
+Every entity ships with its migration in the same commit (§12).
 
 **Marks are ``Numeric``, never ``Float``.** Fix item 1 names float drift
 rendering 19.999999 as a way score integrity breaks; the cheapest place to
@@ -41,6 +43,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from core.auth.roles import Role
 from core.clock import utc_now
 from core.db.types import JSONColumn, UtcDateTime
+from core.scoring.enums import EvaluationEngine, EvaluationStatus, Verdict
+from core.scoring.policy import AttendanceStatus
 from core.submissions.status import SubmissionStatus
 
 
@@ -387,3 +391,207 @@ class SubmissionFile(Base):
 
     def __repr__(self) -> str:
         return f"<SubmissionFile {self.filename}>"
+
+
+class Evaluation(Base):
+    """One scoring run over one submission version.
+
+    **This row is where fix item 2 is enforced.** It pins its inputs: which
+    submission version it read, and which rubric version it measured against.
+    Without those columns, re-evaluating after a student re-uploads would
+    silently rebind an approved mark to work the grader never saw.
+
+    ``version`` increments per retry (fix item 9): a genuine retry starts a new
+    evaluation with a new ``thread_id`` in Phase 5, while a browser refresh
+    resumes the existing one.
+    """
+
+    __tablename__ = "evaluation"
+    __table_args__ = (
+        UniqueConstraint("submission_id", "version", name="uq_evaluation_version"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    submission_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("submission.id"), nullable=False, index=True
+    )
+    #: Pinned, not looked up later — the submission may since have a v3.
+    submission_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    rubric_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("rubric.id"), nullable=False, index=True
+    )
+    rubric_version: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    engine: Mapped[EvaluationEngine] = mapped_column(
+        Enum(EvaluationEngine, native_enum=False, length=16), nullable=False
+    )
+    status: Mapped[EvaluationStatus] = mapped_column(
+        Enum(EvaluationStatus, native_enum=False, length=16),
+        nullable=False,
+        default=EvaluationStatus.PENDING,
+    )
+
+    # Populated by Phase 5; null for manual scoring.
+    model_name: Mapped[str | None] = mapped_column(String(120))
+    prompt_version: Mapped[str | None] = mapped_column(String(32))
+    graph_version: Mapped[str | None] = mapped_column(String(32))
+    raw_response: Mapped[dict[str, Any] | None] = mapped_column(JSONColumn)
+    failure_reason: Mapped[str | None] = mapped_column(Text)
+
+    created_by: Mapped[str] = mapped_column(
+        String(320), ForeignKey("users.email"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        UtcDateTime(), nullable=False, default=utc_now, server_default=func.now()
+    )
+
+    def __repr__(self) -> str:
+        return f"<Evaluation s{self.submission_id} v{self.version} {self.status}>"
+
+
+class CriterionScore(Base):
+    """One criterion's mark within one evaluation.
+
+    ``verdict`` is stored rather than derived from ``score`` (§4). A zero could
+    mean "attempted and wrong" or "not present in the document at all", and the
+    student's feedback page has to tell those apart.
+    """
+
+    __tablename__ = "criterion_score"
+    __table_args__ = (
+        UniqueConstraint("evaluation_id", "criterion_id", name="uq_criterion_score"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    evaluation_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("evaluation.id"), nullable=False, index=True
+    )
+    criterion_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("criterion.id"), nullable=False, index=True
+    )
+    score: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
+    verdict: Mapped[Verdict] = mapped_column(
+        Enum(Verdict, native_enum=False, length=16), nullable=False
+    )
+    confidence: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
+    evidence_span: Mapped[str | None] = mapped_column(Text)
+    rationale: Mapped[str | None] = mapped_column(Text)
+
+    def __repr__(self) -> str:
+        return f"<CriterionScore c{self.criterion_id} {self.score} {self.verdict}>"
+
+
+class ScoreSheet(Base):
+    """The computed totals for one evaluation, and their approval.
+
+    Points at an ``evaluation_id``, never a bare submission — fix item 2:
+    *"ScoreSheet references a specific evaluation_id, never a bare
+    submission."* One sheet per evaluation, enforced by the unique constraint.
+
+    ``approved_by`` and ``approved_at`` are what make invariant #1 provable.
+    Until they are set this row is an estimate, and the exporters say so.
+    """
+
+    __tablename__ = "score_sheet"
+    __table_args__ = (
+        UniqueConstraint("evaluation_id", name="uq_score_sheet_evaluation"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    evaluation_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("evaluation.id"), nullable=False, index=True
+    )
+    submission_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("submission.id"), nullable=False, index=True
+    )
+
+    max_marks: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
+    weighted_percent: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
+    base_total: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
+    penalty: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
+    final_total: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
+
+    days_late: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    attendance_status: Mapped[AttendanceStatus] = mapped_column(
+        Enum(AttendanceStatus, native_enum=False, length=16), nullable=False
+    )
+    reinstated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    reinstate_reason: Mapped[str | None] = mapped_column(Text)
+
+    approved_by: Mapped[str | None] = mapped_column(
+        String(320), ForeignKey("users.email")
+    )
+    approved_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
+    faculty_note: Mapped[str | None] = mapped_column(Text)
+
+    created_at: Mapped[datetime] = mapped_column(
+        UtcDateTime(), nullable=False, default=utc_now, server_default=func.now()
+    )
+
+    @property
+    def is_approved(self) -> bool:
+        return self.approved_at is not None
+
+    def __repr__(self) -> str:
+        state = "approved" if self.is_approved else "estimate"
+        return f"<ScoreSheet e{self.evaluation_id} {self.final_total} {state}>"
+
+
+class ScoreOverride(Base):
+    """An append-only record of a faculty member changing one criterion.
+
+    Never updated, never deleted (fix item 4): two corrections to the same
+    criterion produce two rows, so the history answers who changed what, when,
+    and why. ``reason`` is required, and the emptiness check lives in ``core/``
+    rather than on the widget.
+    """
+
+    __tablename__ = "score_override"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    score_sheet_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("score_sheet.id"), nullable=False, index=True
+    )
+    criterion_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("criterion.id"), nullable=False
+    )
+    old_score: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
+    new_score: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
+    old_verdict: Mapped[Verdict | None] = mapped_column(
+        Enum(Verdict, native_enum=False, length=16)
+    )
+    new_verdict: Mapped[Verdict | None] = mapped_column(
+        Enum(Verdict, native_enum=False, length=16)
+    )
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    overridden_by: Mapped[str] = mapped_column(
+        String(320), ForeignKey("users.email"), nullable=False
+    )
+    overridden_at: Mapped[datetime] = mapped_column(
+        UtcDateTime(), nullable=False, default=utc_now, server_default=func.now()
+    )
+
+    def __repr__(self) -> str:
+        return f"<ScoreOverride c{self.criterion_id} {self.old_score}->{self.new_score}>"
+
+
+class LatePolicyRow(Base):
+    """A stored override of §5.1's default bands, per subject or milestone."""
+
+    __tablename__ = "late_policy"
+    __table_args__ = (
+        UniqueConstraint("scope", "scope_id", "version", name="uq_late_policy_scope"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    scope: Mapped[str] = mapped_column(String(16), nullable=False)  # SUBJECT | MILESTONE
+    scope_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    rules: Mapped[dict[str, Any]] = mapped_column(JSONColumn, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(
+        UtcDateTime(), nullable=False, default=utc_now, server_default=func.now()
+    )
+
+    def __repr__(self) -> str:
+        return f"<LatePolicyRow {self.scope}:{self.scope_id} v{self.version}>"
