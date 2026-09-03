@@ -63,6 +63,7 @@ def create_milestone(
     due_at: datetime,
     max_marks: Decimal | int | str,
     description: str | None = None,
+    public_notes: str | None = None,
     is_visible: bool = False,
 ) -> MilestoneDTO:
     """Add a milestone to a cycle belonging to a subject the actor owns."""
@@ -106,6 +107,7 @@ def create_milestone(
         index=index,
         title=title,
         description=(description or "").strip() or None,
+        public_notes=(public_notes or "").strip() or None,
         due_at=due_at,
         max_marks=marks,
         is_visible=is_visible,

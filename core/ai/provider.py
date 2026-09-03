@@ -24,6 +24,7 @@ from core.ai.prompts.evaluation_v1 import (
     SYSTEM_PROMPT,
     build_user_prompt,
 )
+from core.ai.prompts.query_v1 import QUERY_PROMPT_VERSION
 from core.ai.schemas import AIResponseError, CriterionResult, parse_response
 from core.config import Settings
 from core.errors import RubriQError
@@ -442,3 +443,61 @@ class RetryingProvider:
                 self._sleep(self._base_delay * (2 ** (attempt - 1)))
 
         raise last  # unreachable, but keeps the type checker honest
+
+
+def answer_student_query(
+    question: str,
+    context,
+    *,
+    provider: LLMProvider,
+    student_email: str = "",
+) -> QueryAnswerResult:
+    """§6.1's second public function — the student assistant.
+
+    ``context`` is a ``core.queries.dto.QueryContext``: the published rubric,
+    the milestone description and the guide's public notes, and nothing else
+    (§6.7). Whatever this returns was drawn from that object or was escalated.
+
+    Session memory uses ``MemorySaver`` keyed on the student *and* the
+    milestone (§6.4), so follow-ups keep context within one milestone and
+    memory is never shared between students or carried across milestones.
+    """
+    from langgraph.checkpoint.memory import MemorySaver
+
+    from core.ai.graphs.query import QUERY_GRAPH_VERSION, build_query_graph
+
+    graph = build_query_graph(provider).compile(checkpointer=MemorySaver())
+    thread = f"query:{student_email}:{context.milestone_id}"
+
+    final = graph.invoke(
+        {
+            "question": question,
+            "context_text": context.as_prompt_text(),
+            "source_labels": list(context.source_labels()),
+        },
+        config={"configurable": {"thread_id": thread}},
+    )
+
+    return QueryAnswerResult(
+        answer=final.get("answer", ""),
+        escalated=bool(final.get("escalated")),
+        reason=final.get("escalation_reason", "")
+        or final.get("classification_reason", ""),
+        sources=tuple(final.get("sources", [])),
+        confidence=float(final.get("confidence", 0.0)),
+        prompt_version=QUERY_PROMPT_VERSION,
+        graph_version=QUERY_GRAPH_VERSION,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class QueryAnswerResult:
+    """What the assistant produced for one question."""
+
+    answer: str
+    escalated: bool
+    reason: str
+    sources: tuple[str, ...]
+    confidence: float
+    prompt_version: str
+    graph_version: str

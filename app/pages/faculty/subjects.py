@@ -160,6 +160,12 @@ def render_milestones(subject: SubjectDTO) -> None:
         index = st.number_input("Review number", 1, 20, value=len(milestones) + 1, step=1)
         title = st.text_input("Title", placeholder="Review 1 — Synopsis & SRS")
         description = st.text_area("Description", placeholder="What to submit")
+        public_notes = st.text_area(
+            "Notes for students (optional)",
+            placeholder="Guidance the assistant may quote when students ask.",
+            help="Part of the context the Ask RubriQ assistant is allowed to "
+            "use. Anything not written here is not something it can tell them.",
+        )
         due_date = st.date_input("Due date (IST)")
         due_time = st.time_input("Due time (IST)", value=time(23, 59))
         max_marks = st.number_input("Max marks", 1, 100, value=25)
@@ -179,6 +185,7 @@ def render_milestones(subject: SubjectDTO) -> None:
                     index=int(index),
                     title=title,
                     description=description,
+                    public_notes=public_notes,
                     due_at=due_at,
                     max_marks=int(max_marks),
                 )

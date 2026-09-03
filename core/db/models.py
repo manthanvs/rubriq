@@ -13,6 +13,7 @@ The §4 domain model lands one phase at a time. Present here:
 * ``Evaluation`` / ``CriterionScore`` — one scoring run and its rows (Phase 4)
 * ``ScoreSheet`` / ``ScoreOverride`` — the approved mark and its history (Phase 4)
 * ``LatePolicyRow`` — a per-subject override of §5.1 (Phase 4)
+* ``StudentQuery`` — a question, its answer, and any escalation (Phase 6)
 
 Every entity ships with its migration in the same commit (§12).
 
@@ -229,6 +230,12 @@ class ReviewMilestone(Base):
     index: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
+
+    #: Guidance the assistant may quote, and students may read. §6.7 lists it
+    #: as part of the query context; anything not written here is not context,
+    #: which is what keeps the assistant's world small enough to be safe.
+    public_notes: Mapped[str | None] = mapped_column(Text)
+
     due_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
     max_marks: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
     is_visible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -595,3 +602,53 @@ class LatePolicyRow(Base):
 
     def __repr__(self) -> str:
         return f"<LatePolicyRow {self.scope}:{self.scope_id} v{self.version}>"
+
+
+class StudentQuery(Base):
+    """A question a student asked, and what happened to it.
+
+    Stored rather than ephemeral for two reasons: the faculty inbox needs
+    something to pick up when an answer escalates, and a question the assistant
+    refused is evidence about the rubric — several students asking the same
+    unanswerable thing means the rubric does not say enough.
+
+    ``sources`` records which parts of the context the answer drew on, so a
+    student can be shown *where* an answer came from rather than being asked to
+    trust it.
+    """
+
+    __tablename__ = "student_query"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    student_email: Mapped[str] = mapped_column(
+        String(320), ForeignKey("users.email"), nullable=False, index=True
+    )
+    milestone_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("review_milestone.id"), index=True
+    )
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+
+    ai_answer: Mapped[str | None] = mapped_column(Text)
+    sources: Mapped[list[str] | None] = mapped_column(JSONColumn)
+    confidence: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
+
+    #: True when the assistant declined to answer from context alone. The
+    #: faculty inbox lists exactly these (§6.4).
+    escalated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    escalation_reason: Mapped[str | None] = mapped_column(Text)
+
+    faculty_reply: Mapped[str | None] = mapped_column(Text)
+    replied_by: Mapped[str | None] = mapped_column(String(320), ForeignKey("users.email"))
+    replied_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
+
+    created_at: Mapped[datetime] = mapped_column(
+        UtcDateTime(), nullable=False, default=utc_now, server_default=func.now()
+    )
+
+    @property
+    def is_answered(self) -> bool:
+        return bool(self.faculty_reply) or bool(self.ai_answer and not self.escalated)
+
+    def __repr__(self) -> str:
+        state = "escalated" if self.escalated else "answered"
+        return f"<StudentQuery {self.student_email} {state}>"

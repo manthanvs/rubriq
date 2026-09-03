@@ -17,6 +17,7 @@ from app.context import current_actor, db
 from core.academics.milestones import list_milestones
 from core.academics.subjects import list_subjects
 from core.errors import RubriQError
+from core.queries.service import escalated_count
 from core.scoring.grid import attention_count
 
 actor = current_actor()
@@ -48,6 +49,9 @@ for milestone in published:
         # A milestone with no rubric yet cannot be graded; it is not a failure.
         continue
 
+with db() as session:
+    waiting_questions = escalated_count(actor, session)
+
 a, b, c, d = st.columns(4)
 a.metric("Subjects", len(subjects))
 b.metric("Students", enrolled)
@@ -58,6 +62,13 @@ d.metric(
     help="Rows in the Review Grid waiting on you: unsubmitted, unscored, "
     "unapproved, or blocked by an unevidenced mandatory criterion.",
 )
+
+if waiting_questions:
+    st.info(
+        f"**{waiting_questions}** student question(s) the assistant could not "
+        "answer are waiting in your Query Inbox.",
+        icon=":material/forward_to_inbox:",
+    )
 
 st.divider()
 st.subheader("Your subjects")

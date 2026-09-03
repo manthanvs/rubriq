@@ -171,3 +171,70 @@ def parse_response(raw: str) -> EvaluationResponse:
             for error in exc.errors()
         )
         raise AIResponseError(f"Response failed validation — {problems}") from exc
+
+
+# -- the student assistant (§6.4) ----------------------------------------
+
+
+class QueryClassification(BaseModel):
+    """Whether a question can be answered from the milestone context alone."""
+
+    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
+
+    in_scope: bool
+    reason: str = ""
+
+
+class QueryResponse(BaseModel):
+    """An answer drawn only from the supplied context.
+
+    ``sources`` names the parts of the context used — a criterion code, "due
+    date", "notes". §6.7 allows direct context stuffing and no vector store, so
+    a source is a label rather than a retrieved chunk, but it still lets the
+    student see *where* an answer came from instead of being asked to trust it.
+    """
+
+    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
+
+    answer: str
+    sources: list[str] = Field(default_factory=list)
+    confidence: float = Field(ge=0.0, le=1.0, default=0.0)
+
+    @model_validator(mode="after")
+    def _an_answer_is_not_blank(self) -> QueryResponse:
+        if not self.answer.strip():
+            raise ValueError("The answer was empty; escalate instead of saying nothing.")
+        return self
+
+
+def parse_classification(raw: str) -> QueryClassification:
+    """Parse the classify node's response."""
+    return _parse_into(raw, QueryClassification)
+
+
+def parse_query_response(raw: str) -> QueryResponse:
+    """Parse the answer node's response."""
+    return _parse_into(raw, QueryResponse)
+
+
+def _parse_into(raw: str, model: type[BaseModel]):
+    text = strip_fences(raw)
+    if not text:
+        raise AIResponseError("The model returned an empty response.")
+
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise AIResponseError(f"Response was not valid JSON: {exc.msg}.") from exc
+
+    if not isinstance(payload, dict):
+        raise AIResponseError(f"Expected a JSON object, got {type(payload).__name__}.")
+
+    try:
+        return model.model_validate(payload)
+    except ValidationError as exc:
+        problems = "; ".join(
+            f"{'.'.join(str(p) for p in error['loc'])}: {error['msg']}"
+            for error in exc.errors()
+        )
+        raise AIResponseError(f"Response failed validation — {problems}") from exc
