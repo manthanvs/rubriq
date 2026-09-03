@@ -28,11 +28,13 @@ rapidfuzz>=3               # partial_ratio for the anti-hallucination guard
 pytest>=8                  # tests/core mirrors core/
 ruff>=0.6                  # lint + import order, one tool
 
+google-genai>=1            # decision #4 — Gemini. Imported lazily inside
+                           # core/ai/provider.py, so a missing key or SDK is a
+                           # readable message rather than a startup failure
+
 # --- Later phases, listed so the plan is visible; install when the phase starts ---
-# One AI provider SDK, chosen by decision #4 — both are implemented behind
-# core/ai/provider.py, so this is a one-line change either way:
-# google-genai>=1           # if decision #4 picks Gemini
-# groq>=0.11                # if decision #4 picks Groq
+# groq>=0.11               # the other half of decision #4, kept implemented so
+                           # switching provider stays a secrets.toml change
 # langgraph>=0.2           # Phase 5b — evaluation graph, core/ai/ only
 # langgraph-checkpoint-sqlite>=2    # Phase 5b — resume-after-rerun checkpointer
 #                                   # (SqliteSaver, not PostgresSaver — decision #8)

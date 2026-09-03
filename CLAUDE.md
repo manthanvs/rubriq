@@ -70,7 +70,7 @@ If a task appears to require breaking one, stop and ask.
 | Validation | Pydantic v2 | AI response schema enforcement |
 | File parsing | `pdfplumber`, `python-docx` | Text extraction at upload time |
 | AI orchestration | **LangGraph** (+ `langgraph-checkpoint-sqlite`) | The evaluation flow is genuinely a graph with conditional retry edges; the checkpointer also solves Streamlit's rerun-loses-progress problem. `SqliteSaver`, not `PostgresSaver` — see §6.2 |
-| AI model | One provider behind `core/ai/provider.py` (Gemini or Groq) | Swappable; never import an SDK outside this module |
+| AI model | **Gemini** (`gemini-2.0-flash`) behind `core/ai/provider.py` | Decision #4. Groq stays implemented behind the same one-method protocol, so switching is config plus an install. Never import an SDK outside this module |
 | Export | `openpyxl` | Real `.xlsx`, not a CSV rename |
 | Calendar | Agenda table in `app/components/calendar.py` | Decision #3. No dependency; both roles call one function |
 | Tests | `pytest` | Testing `core/` is easy precisely because it has no Streamlit in it |
@@ -507,7 +507,7 @@ The guidelines demand all SDLC components. These are tasks, not afterthoughts.
 | 1 | Project title | — | ✅ **RubriQ** |
 | 2 | Stack | — | ✅ **Streamlit only** |
 | 3 | Calendar widget | `streamlit-calendar` vs agenda table | ✅ **Agenda table** — decided in Phase 2. The calendar is a supporting page, not the centrepiece, so a third-party FullCalendar wrapper is dependency risk spent in the wrong place. An agenda also answers the question students actually have ("when is my next deadline" is a sorted list, not a month grid), and sorting soonest-first makes lateness legible before it matters (fix item 10). Both roles call one function in `app/components/calendar.py`, so swapping it later touches one file. Reason recorded in that module's docstring. |
-| 4 | LLM provider | Gemini vs Groq | pick on free-tier rate limits; the provider sits behind the graph nodes so it stays reversible |
+| 4 | LLM provider | Gemini vs Groq | ✅ **Gemini** — decided in Phase 5a. Both are implemented behind the one-method `LLMProvider` protocol in `core/ai/provider.py` with their SDKs imported lazily, so switching is a `secrets.toml` change plus a `pip install`, not a code change. Model: `gemini-2.0-flash`, with `response_mime_type="application/json"` set so the §6.5 contract is enforced by the API as well as by the Pydantic schema. The key lives only in gitignored `.streamlit/secrets.toml`; with no key configured the app says AI evaluation is unavailable and everything deterministic still works (invariant #10). |
 | 4b | Criterion batching | one LLM call per criterion vs batched | start batched (cheaper, fewer rate-limit hits); split only if per-criterion accuracy is visibly worse |
 | 5 | Individual or group | solo vs modular split | affects §11 module-ownership section |
 | 6 | Submission types | PDF/DOCX only, or also GitHub URL | PDF/DOCX for Phase 3; URL is a Phase 7 stretch |
