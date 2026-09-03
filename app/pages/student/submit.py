@@ -15,7 +15,7 @@ import streamlit as st
 
 from app.components.rubric_view import render_rubric, render_version_badge
 from app.context import current_actor, db, get_settings
-from app.state import flash, invalidate, render_flash
+from app.state import flash, invalidate
 from core.academics.dto import MilestoneDTO
 from core.academics.milestones import list_milestones
 from core.clock import ist_date, to_ist, utc_now
@@ -99,7 +99,6 @@ actor = current_actor()
 
 st.title("Submit")
 
-render_flash()
 
 with db() as session:
     milestones = list_milestones(actor, session)

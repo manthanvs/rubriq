@@ -16,7 +16,9 @@ from core.auth.roles import Role
 
 APP = Path(__file__).resolve().parents[3] / "app"
 
-# §8, verbatim.
+#: §8's list, plus "Activity" — fix item 15 asks for a filterable view of the
+#: audit trail and §8 did not allocate a page for it. Recorded here rather than
+#: silently widened, so the difference from the spec is deliberate and visible.
 EXPECTED_FACULTY = [
     "Dashboard",
     "Subjects",
@@ -25,6 +27,7 @@ EXPECTED_FACULTY = [
     "Review Grid",
     "Query Inbox",
     "Reports",
+    "Activity",
 ]
 EXPECTED_STUDENT = ["Dashboard", "Calendar", "Submit", "Feedback", "Ask RubriQ"]
 

@@ -15,7 +15,7 @@ from app.components.rubric_view import (
     render_weight_status,
 )
 from app.context import current_actor, db
-from app.state import flash, invalidate, render_flash
+from app.state import after_mutation, flash, invalidate
 from core.academics.milestones import list_milestones
 from core.academics.subjects import list_subjects
 from core.errors import RubriQError
@@ -121,9 +121,7 @@ def render_draft_editor(draft: RubricDTO) -> None:
         try:
             with db() as session:
                 publish_rubric(actor, session, rubric_id=draft.id)
-            invalidate()
-            flash(f"Published v{draft.version} — it is now frozen.")
-            st.rerun()
+            after_mutation(f"Published v{draft.version} — it is now frozen.")
         except RubriQError as exc:
             st.error(str(exc), icon=":material/error:")
 
@@ -156,7 +154,6 @@ actor = current_actor()
 
 st.title("Rubric Builder")
 
-render_flash()
 
 with db() as session:
     subjects = list_subjects(actor, session)

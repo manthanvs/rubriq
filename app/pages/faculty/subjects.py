@@ -15,7 +15,7 @@ from datetime import datetime, time
 import streamlit as st
 
 from app.context import current_actor, db, get_settings
-from app.state import invalidate
+from app.state import after_mutation, invalidate
 from core.academics.dto import SubjectDTO
 from core.academics.enrollment import (
     TEMPLATE_CSV,
@@ -63,9 +63,7 @@ def render_new_subject_form(has_subjects: bool) -> None:
                     created = create_subject(
                         actor, session, code=code, name=name, semester=int(semester)
                     )
-                invalidate()
-                st.success(f"Created {created.label}.")
-                st.rerun()
+                after_mutation(f"Created {created.label}.")
             except RubriQError as exc:
                 st.error(str(exc), icon=":material/error:")
 
@@ -189,9 +187,7 @@ def render_milestones(subject: SubjectDTO) -> None:
                     due_at=due_at,
                     max_marks=int(max_marks),
                 )
-            invalidate()
-            st.success(f"Added review {int(index)}.")
-            st.rerun()
+            after_mutation(f"Added review {int(index)}.")
         except RubriQError as exc:
             st.error(str(exc), icon=":material/error:")
 

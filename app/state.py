@@ -52,6 +52,13 @@ def invalidate() -> None:
     Called explicitly after every mutation. Bumping a version rather than
     calling ``st.cache_data.clear()`` avoids throwing away every other user's
     entries in the same process.
+
+    §14 sketches this as ``invalidate(*keys)``. It takes no keys, deliberately:
+    there is one version counter per session, so a bump expires everything this
+    user cached regardless of what was named. A ``*keys`` parameter that changed
+    nothing would read like surgical invalidation while doing the opposite,
+    which is worse than the blunt version. Add per-key counters the day a page
+    is slow enough to need one, and not before.
     """
     st.session_state[CACHE_VERSION_KEY] = cache_version() + 1
 
@@ -69,10 +76,30 @@ def flash(message: str, *, icon: str = ":material/check_circle:") -> None:
 
 
 def render_flash() -> None:
-    """Draw and clear any queued message. Call once, near the top of a page."""
+    """Draw and clear any queued message.
+
+    Called once by ``app/main.py``, above whichever page runs, so a new page
+    gets its confirmations without having to remember anything.
+    """
     payload = st.session_state.pop(FLASH_KEY, None)
     if payload is None:
         return
 
     message, icon = payload
     st.success(message, icon=icon)
+
+
+def after_mutation(message: str, *, icon: str = ":material/check_circle:") -> None:
+    """Invalidate, queue the confirmation, and rerun — the whole ritual.
+
+    Every mutating branch in ``app/`` ends in the same three lines, and getting
+    them out of order is not a visible mistake: ``st.success()`` before
+    ``st.rerun()`` is drawn and immediately discarded, so the user is told
+    nothing and the page just blinks. Doing it in one place makes that
+    unorderable.
+
+    This never returns — ``st.rerun()`` raises to restart the script.
+    """
+    invalidate()
+    flash(message, icon=icon)
+    st.rerun()

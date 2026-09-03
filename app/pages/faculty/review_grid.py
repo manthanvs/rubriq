@@ -9,16 +9,27 @@ Three things this page deliberately does **not** do:
 * build its own export — both buttons call ``build_export_rows`` (fix item 11);
 * decide who needs attention — that predicate lives on the DTO so the
   dashboard count cannot disagree with this filter (fix item 8).
+
+Layout is fix item 12. Identity columns are pinned so a name never scrolls out
+of view, every column carries an explicit width rather than being sized by its
+contents, and past ``CRITERION_OVERFLOW`` criteria the verdict block moves into
+its own expander — a wide rubric must not push ``Final`` off the right edge.
 """
 
 from __future__ import annotations
 
-import pandas as pd
 import streamlit as st
 
 from app.components.ai_runner import render_ai_runner
+from app.components.review_grid import (
+    LEGEND,
+    build_criterion_frame,
+    build_frame,
+    grid_column_config,
+    split_criteria,
+)
 from app.context import current_actor, db
-from app.state import flash, invalidate, render_flash
+from app.state import after_mutation
 from core.academics.milestones import list_milestones
 from core.academics.subjects import list_subjects
 from core.clock import to_ist, utc_now
@@ -47,37 +58,36 @@ VERDICT_CHOICES = [
 ]
 
 
-def build_frame(rows: tuple[GridRow, ...], codes: tuple[str, ...]) -> pd.DataFrame:
-    """The grid table. Verdict glyphs per criterion, totals at the end."""
-    records = []
-    for row in rows:
-        sheet = row.sheet
-        record = {
-            "!": "●" if row.needs_attention else "",
-            "PRN": row.prn or "—",
-            "Name": row.student_name or row.student_email,
-            "Ver": row.submission_version or "",
-            "Days Late": sheet.days_late if sheet else "",
-            "Status": row.status_label,
-        }
-        by_code = {c.code: c for c in (sheet.criteria if sheet else ())}
-        for code in codes:
-            criterion = by_code.get(code)
-            record[code] = criterion.verdict.glyph if criterion else ""
+def reread_row(milestone_id: int, student_email: str) -> GridRow | None:
+    """Fetch one student's row as it stands *now*.
 
-        record["Base"] = float(sheet.base_total) if sheet else None
-        record["Penalty"] = float(sheet.penalty) if sheet else None
-        # display_total, so an absent student is never a number (fix item 10).
-        record["Final"] = sheet.display_total if sheet else ""
-        record["By"] = sheet.provenance if sheet else ""
-        records.append(record)
-
-    return pd.DataFrame(records)
+    Fix item 14: the drawer is open across reruns and was handed a row captured
+    when the grid last rendered. In the time it stays open the sheet can be
+    approved in another tab, or the student can upload a new version. The
+    services in ``core`` re-check their own preconditions, so a stale write is
+    refused rather than applied — but being refused by an error box after
+    filling a form is a bad way to find out. Reading again on every rerun of
+    the dialog means the form shows what is actually there.
+    """
+    with db() as session:
+        for candidate in list_grid_rows(actor, session, milestone_id=milestone_id):
+            if candidate.student_email == student_email:
+                return candidate
+    return None
 
 
 @st.dialog("Score sheet", width="large")
-def score_drawer(row: GridRow, codes: tuple[str, ...], rubric) -> None:
+def score_drawer(row: GridRow, codes: tuple[str, ...], rubric, milestone_id: int) -> None:
     """The per-student drawer: score, override, approve."""
+    fresh = reread_row(milestone_id, row.student_email)
+    if fresh is None:
+        st.warning(
+            "This student is no longer enrolled in the subject.",
+            icon=":material/person_off:",
+        )
+        return
+    row = fresh
+
     st.write(f"**{row.student_name or row.student_email}** · {row.prn or '—'}")
 
     if row.submission_id is None:
@@ -198,9 +208,7 @@ def render_score_form(row: GridRow, rubric) -> None:
                         scores={k: (v[0], v[1]) for k, v in values.items()},
                         faculty_note=note,
                     )
-                invalidate()
-                flash("Scores saved.")
-                st.rerun()
+                after_mutation("Scores saved.")
             except RubriQError as exc:
                 st.error(str(exc), icon=":material/error:")
 
@@ -225,9 +233,7 @@ def render_score_form(row: GridRow, rubric) -> None:
         try:
             with db() as session:
                 approve_sheet(actor, session, score_sheet_id=row.sheet.id)
-            invalidate()
-            flash(f"Approved {row.student_name or row.student_email}.")
-            st.rerun()
+            after_mutation(f"Approved {row.student_name or row.student_email}.")
         except RubriQError as exc:
             st.error(str(exc), icon=":material/error:")
 
@@ -240,9 +246,7 @@ def render_score_form(row: GridRow, rubric) -> None:
                         reinstate(
                             actor, session, score_sheet_id=row.sheet.id, reason=reason
                         )
-                    invalidate()
-                    flash("Reinstated — the late penalty is zeroed.")
-                    st.rerun()
+                    after_mutation("Reinstated — the late penalty is zeroed.")
                 except RubriQError as exc:
                     st.error(str(exc), icon=":material/error:")
 
@@ -285,9 +289,7 @@ def render_override_form(sheet) -> None:
                         new_verdict=new_verdict,
                         reason=reason,
                     )
-                invalidate()
-                flash("Override applied. The sheet needs approving again.")
-                st.rerun()
+                after_mutation("Override applied. The sheet needs approving again.")
             except RubriQError as exc:
                 st.error(str(exc), icon=":material/error:")
 
@@ -331,9 +333,7 @@ def render_bulk_approve(rows: tuple[GridRow, ...]) -> None:
                     with db() as session:
                         approve_sheet(actor, session, score_sheet_id=row.sheet.id)
                     approved += 1
-                invalidate()
-                flash(f"Approved {approved}. Skipped {len(excluded)}.")
-                st.rerun()
+                after_mutation(f"Approved {approved}. Skipped {len(excluded)}.")
             except RubriQError as exc:
                 st.error(f"Stopped after {approved}: {exc}", icon=":material/error:")
 
@@ -341,7 +341,6 @@ def render_bulk_approve(rows: tuple[GridRow, ...]) -> None:
 actor = current_actor()
 
 st.title("Review Grid")
-render_flash()
 
 with db() as session:
     subjects = list_subjects(actor, session)
@@ -398,30 +397,34 @@ visible = needing if only_attention else list(rows)
 if not visible:
     st.success("Nothing needs attention here.", icon=":material/task_alt:")
 else:
-    st.caption(
-        "Legend: ✓ followed · ~ partial · ✗ not followed · ? no evidence"
-        " · ● needs attention"
-    )
+    st.caption(LEGEND)
+
+    # Fix item 12: a wide rubric moves its verdicts out rather than pushing the
+    # totals off-screen. The main table always ends in Base / Penalty / Final.
+    inline_codes, overflowing = split_criteria(codes)
 
     event = st.dataframe(
-        build_frame(tuple(visible), codes),
+        build_frame(tuple(visible), inline_codes),
         hide_index=True,
         use_container_width=True,
         on_select="rerun",
         selection_mode="single-row",
-        column_config={
-            "!": st.column_config.TextColumn("!", width="small"),
-            "PRN": st.column_config.TextColumn(width="small"),
-            "Ver": st.column_config.NumberColumn(width="small", format="v%d"),
-            "Base": st.column_config.NumberColumn(width="small", format="%.2f"),
-            "Penalty": st.column_config.NumberColumn(width="small", format="%.2f"),
-            "Final": st.column_config.TextColumn(width="small"),
-        },
+        column_config=grid_column_config(rubric, inline_codes),
     )
+
+    if overflowing:
+        with st.expander(f"Criterion verdicts ({len(codes)} criteria)"):
+            st.caption(LEGEND)
+            st.dataframe(
+                build_criterion_frame(tuple(visible), codes),
+                hide_index=True,
+                use_container_width=True,
+                column_config=grid_column_config(rubric, codes),
+            )
 
     selected = event.selection.rows if event and event.selection else []
     if selected:
-        score_drawer(visible[selected[0]], codes, rubric)
+        score_drawer(visible[selected[0]], codes, rubric, milestone.id)
 
 render_bulk_approve(tuple(rows))
 

@@ -20,7 +20,7 @@ from typing import Any
 import streamlit as st
 
 from app.navigation import build_navigation
-from app.state import SIGNED_IN_EMAIL_KEY
+from app.state import SIGNED_IN_EMAIL_KEY, render_flash
 from core.auth.actor import Actor
 from core.auth.service import authenticate, sign_in
 from core.config import ConfigError, Settings
@@ -206,6 +206,12 @@ def main() -> None:
         )
 
     _render_identity(actor, health.ok)
+
+    # Fix item 14: one call, above whichever page runs. A per-page render_flash()
+    # is a line every new page has to remember, and forgetting it is invisible —
+    # the confirmation is simply never drawn.
+    render_flash()
+
     build_navigation(actor).run()
 
 

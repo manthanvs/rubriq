@@ -11,7 +11,7 @@
 PY ?= python
 PIP := $(PY) -m pip
 
-.PHONY: help install run test lint fmt migrate revision seed-faculty seed
+.PHONY: help install run test lint fmt migrate revision seed-faculty seed reseed
 
 help:
 	@echo "install   - install requirements.txt"
@@ -22,7 +22,8 @@ help:
 	@echo "migrate   - alembic upgrade head"
 	@echo "revision  - alembic autogenerate, M=\"message\""
 	@echo "seed-faculty - seed the faculty allow-list into users"
-	@echo "seed      - demo dataset (arrives in Phase 7)"
+	@echo "seed      - build the demo dataset"
+	@echo "reseed    - wipe and rebuild the demo dataset"
 
 install:
 	$(PIP) install -r requirements.txt
@@ -51,4 +52,7 @@ seed-faculty:
 	$(PY) scripts/seed_faculty.py
 
 seed:
-	@echo "scripts/seed_demo.py arrives in Phase 7 (see CLAUDE.md §10)."
+	$(PY) scripts/seed_demo.py
+
+reseed:
+	$(PY) scripts/seed_demo.py --reset

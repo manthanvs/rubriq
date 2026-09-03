@@ -14,7 +14,7 @@ from __future__ import annotations
 import streamlit as st
 
 from app.context import current_actor, db
-from app.state import flash, invalidate, render_flash
+from app.state import after_mutation
 from core.clock import to_ist
 from core.errors import RubriQError
 from core.queries.service import list_escalated, reply
@@ -22,7 +22,6 @@ from core.queries.service import list_escalated, reply
 actor = current_actor()
 
 st.title("Query Inbox")
-render_flash()
 
 show_replied = st.toggle("Include questions I have already answered", value=False)
 
@@ -80,8 +79,6 @@ for entry in queries:
                 try:
                     with db() as session:
                         reply(actor, session, query_id=entry.id, message=message)
-                    invalidate()
-                    flash(f"Replied to {entry.student_name}.")
-                    st.rerun()
+                    after_mutation(f"Replied to {entry.student_name}.")
                 except RubriQError as exc:
                     st.error(str(exc), icon=":material/error:")

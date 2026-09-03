@@ -7,7 +7,7 @@
 
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('help', 'install', 'run', 'test', 'lint', 'fmt', 'migrate', 'revision', 'seed-faculty', 'seed')]
+    [ValidateSet('help', 'install', 'run', 'test', 'lint', 'fmt', 'migrate', 'revision', 'seed-faculty', 'seed', 'reseed')]
     [string]$Target = 'help',
 
     [string]$M
@@ -36,7 +36,8 @@ switch ($Target) {
         'migrate   - alembic upgrade head'
         'revision  - alembic autogenerate, -M "message"'
         'seed-faculty - seed the faculty allow-list into users'
-        'seed      - demo dataset (arrives in Phase 7)'
+        'seed      - build the demo dataset'
+        'reseed    - wipe and rebuild the demo dataset'
         ''
         "interpreter: $py"
     }
@@ -56,5 +57,6 @@ switch ($Target) {
         Invoke-Py @('-m', 'alembic', 'revision', '--autogenerate', '-m', $M)
     }
     'seed-faculty' { Invoke-Py @('scripts/seed_faculty.py') }
-    'seed'     { 'scripts/seed_demo.py arrives in Phase 7 (see CLAUDE.md section 10).' }
+    'seed'     { Invoke-Py @('scripts/seed_demo.py') }
+    'reseed'   { Invoke-Py @('scripts/seed_demo.py', '--reset') }
 }

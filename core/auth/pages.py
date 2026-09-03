@@ -95,6 +95,16 @@ ALL_PAGES: tuple[PageSpec, ...] = (
         roles=FACULTY_ONLY,
         section="Review",
     ),
+    # Not in §8's original list. Fix item 15 asks for a filterable view of the
+    # audit trail, and it needs somewhere to live.
+    PageSpec(
+        key="faculty_activity",
+        title="Activity",
+        icon=":material/history:",
+        path="pages/faculty/activity.py",
+        roles=FACULTY_ONLY,
+        section="Review",
+    ),
     # --- Student ---
     PageSpec(
         key="student_dashboard",
