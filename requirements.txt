@@ -11,16 +11,28 @@ SQLAlchemy>=2.0            # engine and ORM; imported only inside core/db
 alembic>=1.13              # migration history is an SDLC deliverable, not optional
 python-dotenv>=1.0         # lets Alembic and pytest read .env; they have no st.secrets
 
+# --- Phase 3: text extraction at upload ---
+pdfplumber>=0.11           # PDF text; degrades with a note if a scan has none
+python-docx>=1.1           # DOCX text, including requirement tables
+
+# --- Phase 4: export ---
+openpyxl>=3.1              # a real .xlsx, not a CSV rename (section 3)
+
+# --- Phase 5a: AI response contract and evidence guard ---
+pydantic>=2                # enforces the section 6.5 response contract; the
+                           # NO_EVIDENCE-scores-zero rule is a validator so no
+                           # caller can route around it (fix item 5)
+rapidfuzz>=3               # partial_ratio for the anti-hallucination guard
+
 # --- Dev ---
 pytest>=8                  # tests/core mirrors core/
 ruff>=0.6                  # lint + import order, one tool
 
 # --- Later phases, listed so the plan is visible; install when the phase starts ---
-# pydantic>=2              # Phase 5a — AI response schema enforcement
-# rapidfuzz>=3             # Phase 5a — evidence verification guard (§6.5)
-# openpyxl>=3.1            # Phase 4  — real .xlsx export
-# pdfplumber>=0.11         # Phase 3  — PDF text extraction at upload
-# python-docx>=1.1         # Phase 3  — DOCX text extraction
+# One AI provider SDK, chosen by decision #4 — both are implemented behind
+# core/ai/provider.py, so this is a one-line change either way:
+# google-genai>=1           # if decision #4 picks Gemini
+# groq>=0.11                # if decision #4 picks Groq
 # langgraph>=0.2           # Phase 5b — evaluation graph, core/ai/ only
 # langgraph-checkpoint-sqlite>=2    # Phase 5b — resume-after-rerun checkpointer
 #                                   # (SqliteSaver, not PostgresSaver — decision #8)
