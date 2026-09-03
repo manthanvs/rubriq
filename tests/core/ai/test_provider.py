@@ -124,10 +124,33 @@ class RecordingProvider(StubProvider):
 class TestExitCriterion:
     """Fabricated evidence is rejected, end to end, with no LangGraph."""
 
-    def test_langgraph_is_not_installed(self) -> None:
-        """§10: 5a must stand on its own before the graph exists."""
-        with pytest.raises(ImportError):
-            __import__("langgraph")
+    def test_the_5a_path_does_not_depend_on_langgraph(self) -> None:
+        """§10: the graph is "an upgrade to an already-functioning path".
+
+        Until Phase 5b this asserted langgraph was absent. It is installed now,
+        so the assertion that still carries the original meaning is that the
+        direct path does not reach for it: schemas, guards and identity import
+        no graph machinery, and evaluate_submission runs without one.
+        """
+        import ast
+        from pathlib import Path
+
+        core_ai = Path(__file__).resolve().parents[3] / "core" / "ai"
+        standalone = ("schemas.py", "guards.py", "identity.py")
+
+        for name in standalone:
+            tree = ast.parse((core_ai / name).read_text(encoding="utf-8"))
+            imported = {
+                (node.module or "").split(".")[0]
+                for node in ast.walk(tree)
+                if isinstance(node, ast.ImportFrom)
+            } | {
+                alias.name.split(".")[0]
+                for node in ast.walk(tree)
+                if isinstance(node, ast.Import)
+                for alias in node.names
+            }
+            assert "langgraph" not in imported, f"{name} now depends on the graph"
 
     def test_a_fabricated_span_is_demoted_and_recorded(self) -> None:
         provider = StubProvider(

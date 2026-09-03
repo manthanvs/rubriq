@@ -26,6 +26,7 @@ import logging
 import re
 import unicodedata
 from dataclasses import dataclass
+from decimal import Decimal
 
 from rapidfuzz import fuzz
 
@@ -168,7 +169,9 @@ def demote(result: CriterionResult, reason: str) -> CriterionResult:
     return result.model_copy(
         update={
             "verdict": Verdict.NO_EVIDENCE,
-            "score": 0,
+            # Decimal, not int: the model round-trips through the checkpointer
+            # and a bare 0 makes pydantic re-serialise it as the wrong type.
+            "score": Decimal("0"),
             "rationale": (
                 f"Evidence rejected: {reason} "
                 f"(original rationale: {result.rationale or '—'})"

@@ -11,8 +11,10 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# The database. SQLite in WAL mode keeps two sidecar files beside it
-# (-wal, -shm); none of the three belong in version control.
+# The database, and the graph checkpoint store beside it. SQLite in WAL mode
+# keeps two sidecar files per database (-wal, -shm); none belong in version
+# control. ai_checkpoints.db is deliberately separate from rubriq.db so a
+# corrupt checkpoint can be deleted without touching a single mark (section 6.2).
 *.db
 *.db-wal
 *.db-shm

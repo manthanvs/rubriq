@@ -16,6 +16,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from app.components.ai_runner import render_ai_runner
 from app.context import current_actor, db
 from app.state import flash, invalidate, render_flash
 from core.academics.milestones import list_milestones
@@ -27,7 +28,7 @@ from core.exports.tsv import to_tsv
 from core.exports.xlsx import to_xlsx
 from core.rubrics.service import published_rubric_for
 from core.scoring.dto import GridRow
-from core.scoring.enums import Verdict
+from core.scoring.enums import EvaluationStatus, Verdict
 from core.scoring.grid import list_grid_rows
 from core.scoring.sheets import (
     approval_blockers,
@@ -97,6 +98,14 @@ def score_drawer(row: GridRow, codes: tuple[str, ...], rubric) -> None:
         )
 
     sheet = row.sheet
+
+    if sheet is not None and sheet.evaluation_status is EvaluationStatus.FAILED:
+        st.error(
+            "The AI evaluation failed for this submission. Score it by hand "
+            "below, or retry from the AI evaluation panel — a retry starts a "
+            "fresh run rather than resuming the one that failed.",
+            icon=":material/error:",
+        )
 
     if sheet is not None and sheet.reinstated:
         st.info(f"Reinstated — {sheet.reinstate_reason}", icon=":material/gavel:")
@@ -371,6 +380,9 @@ if rubric is None:
     st.stop()
 
 codes = tuple(c.code for c in rubric.criteria)
+
+with st.expander("AI evaluation", expanded=False):
+    render_ai_runner(rows, rubric)
 
 needing = [r for r in rows if r.needs_attention]
 

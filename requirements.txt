@@ -32,10 +32,12 @@ google-genai>=1            # decision #4 — Gemini. Imported lazily inside
                            # core/ai/provider.py, so a missing key or SDK is a
                            # readable message rather than a startup failure
 
+# --- Phase 5b: orchestration ---
+langgraph>=0.2             # the evaluation graph; imported only inside core/ai
+langgraph-checkpoint-sqlite>=2  # SqliteSaver — resumes a run after a Streamlit
+                           # rerun instead of re-calling the model (section 6.2)
+
 # --- Later phases, listed so the plan is visible; install when the phase starts ---
 # groq>=0.11               # the other half of decision #4, kept implemented so
                            # switching provider stays a secrets.toml change
-# langgraph>=0.2           # Phase 5b — evaluation graph, core/ai/ only
-# langgraph-checkpoint-sqlite>=2    # Phase 5b — resume-after-rerun checkpointer
-#                                   # (SqliteSaver, not PostgresSaver — decision #8)
 # streamlit-calendar     — NOT used. Decision #3 chose an agenda table.

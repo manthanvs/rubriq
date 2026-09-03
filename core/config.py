@@ -68,6 +68,7 @@ class Settings:
     admin_allowlist: tuple[str, ...] = ()
     llm_provider: str | None = None
     llm_api_key: str | None = None
+    llm_model: str | None = None
     echo_sql: bool = False
     uploads_root: Path = DEFAULT_UPLOADS_ROOT
 
@@ -100,6 +101,7 @@ class Settings:
             admin_allowlist=_as_emails(rubriq.get("admin_allowlist")),
             llm_provider=_optional_str(llm.get("provider")),
             llm_api_key=_optional_str(llm.get("api_key")),
+            llm_model=_optional_str(llm.get("model")),
             echo_sql=bool(database.get("echo_sql", False)),
             uploads_root=_as_path(rubriq.get("uploads_root"), DEFAULT_UPLOADS_ROOT),
         )
@@ -124,6 +126,7 @@ class Settings:
             admin_allowlist=_as_emails(env.get("RUBRIQ_ADMIN_ALLOWLIST")),
             llm_provider=_optional_str(env.get("RUBRIQ_LLM_PROVIDER")),
             llm_api_key=_optional_str(env.get("RUBRIQ_LLM_API_KEY")),
+            llm_model=_optional_str(env.get("RUBRIQ_LLM_MODEL")),
             echo_sql=_as_bool(env.get("RUBRIQ_ECHO_SQL")),
             uploads_root=_as_path(env.get("RUBRIQ_UPLOADS_ROOT"), DEFAULT_UPLOADS_ROOT),
         )

@@ -36,6 +36,11 @@ EXEMPT: dict[str, str] = {
         "Infrastructure, not a service. Takes actor_email explicitly and is "
         "called from inside an already-scoped transaction."
     ),
+    "core.scoring.ai_runs.next_evaluation_version": (
+        "Returns an integer derived from a submission id the caller already "
+        "holds. It reads no rows and can leak nothing, so scoping it would be "
+        "ceremony rather than protection."
+    ),
 }
 
 
