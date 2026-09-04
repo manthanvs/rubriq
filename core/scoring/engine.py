@@ -198,3 +198,39 @@ def compute_score_sheet(
     assert result.final_total <= result.max_marks, "final_total exceeded max_marks"
 
     return result
+
+
+def apply_member_adjustment(
+    group_total: Decimal, delta: Decimal, max_marks: Decimal
+) -> Decimal:
+    """One group member's mark, given the group's total and their adjustment.
+
+    Decision from Phase 9: a member is marked *apart from* the group by a
+    signed delta, not by a replacement. So the arithmetic is one line, and the
+    two clamps around it are the whole point:
+
+        member_total = clamp(0, group_total + delta, max_marks)
+
+    Both bounds are enforced here rather than trusted to the caller, for the
+    same reason ``compute_score_sheet`` asserts them: a negative mark and a
+    mark above the maximum are each a wrong number on a real student's record,
+    and the UI is not where that gets decided.
+
+    Rounded once, half-up, like every other total in this module.
+    """
+    if max_marks < 0:
+        raise ValidationError("max_marks cannot be negative.")
+
+    total = group_total + delta
+
+    if total < 0:
+        total = Decimal("0")
+    elif total > max_marks:
+        total = max_marks
+
+    result = money(total)
+
+    assert result >= 0, "member total went negative"
+    assert result <= money(max_marks), "member total exceeded max_marks"
+
+    return result

@@ -18,6 +18,8 @@ its own expander — a wide rubric must not push ``Final`` off the right edge.
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 import streamlit as st
 
 from app.components.ai_runner import render_ai_runner
@@ -37,13 +39,17 @@ from core.errors import RubriQError
 from core.exports.rows import build_export_rows
 from core.exports.tsv import to_tsv
 from core.exports.xlsx import to_xlsx
+from core.groups.service import granted_group_for
 from core.rubrics.service import published_rubric_for
 from core.scoring.dto import GridRow
 from core.scoring.enums import EvaluationStatus, Verdict
 from core.scoring.grid import list_grid_rows
 from core.scoring.sheets import (
+    adjust_member,
     approval_blockers,
     approve_sheet,
+    member_adjustment_history,
+    member_totals,
     override_criterion,
     override_history,
     reinstate,
@@ -155,7 +161,17 @@ def score_drawer(row: GridRow, codes: tuple[str, ...], rubric, milestone_id: int
     if sheet is not None and sheet.reinstated:
         st.info(f"Reinstated — {sheet.reinstate_reason}", icon=":material/gavel:")
 
-    tab_score, tab_history = st.tabs(["Score", "History"])
+    tabs = ["Score", "History"]
+    if row.is_group_work:
+        tabs.insert(1, "Contribution")
+
+    rendered = st.tabs(tabs)
+    tab_score = rendered[0]
+    tab_history = rendered[-1]
+
+    if row.is_group_work:
+        with rendered[1]:
+            render_contribution(row)
 
     with tab_score:
         if sheet is not None and sheet.is_approved:
@@ -284,6 +300,137 @@ def render_score_form(row: GridRow, rubric) -> None:
                     after_mutation("Reinstated — the late penalty is zeroed.")
                 except RubriQError as exc:
                     st.error(str(exc), icon=":material/error:")
+
+
+def render_contribution(row: GridRow) -> None:
+    """Mark one member of a granted group apart from the rest of it.
+
+    The group's total stays the baseline and is shown as such: what is entered
+    here is a signed difference from it, not a replacement mark. A reason is
+    required because the student sees it — it is the only record of why they
+    were marked differently from someone who submitted the same work.
+    """
+    sheet = row.sheet
+
+    if sheet is None:
+        st.caption("Nothing scored yet, so there is nothing to divide up.")
+        return
+
+    if sheet.is_absent:
+        st.info(
+            "This submission is recorded ABSENT. An adjustment can be stored "
+            "for the record, but the row stays ABSENT rather than becoming a "
+            "number (§5.1).",
+            icon=":material/gavel:",
+        )
+
+    with db() as session:
+        group = granted_group_for(
+            actor,
+            session,
+            subject_id=milestone.subject_id,
+            student_email=row.student_email,
+        )
+        totals = member_totals(actor, session, score_sheet_id=sheet.id)
+        history = member_adjustment_history(actor, session, sheet.id)
+
+    if group is None:
+        st.caption("This student is no longer in a granted group.")
+        return
+
+    st.caption(
+        f"**{group.name}** earned **{sheet.display_total}** out of "
+        f"{sheet.max_marks:g}. Everyone gets that unless you say otherwise "
+        "below."
+    )
+
+    st.dataframe(
+        [
+            {
+                "Member": member.student_name or member.student_email,
+                "PRN": member.prn or "—",
+                "Mark": (
+                    "ABSENT"
+                    if sheet.is_absent
+                    else f"{totals.get(member.student_email, sheet.final_total)}"
+                ),
+                "Adjustment": next(
+                    (
+                        f"{h['delta']:+}"
+                        for h in reversed(history)
+                        if h["student_email"] == member.student_email
+                    ),
+                    "—",
+                ),
+            }
+            for member in group.members
+        ],
+        hide_index=True,
+        width="stretch",
+    )
+
+    with st.form(f"adjust_{sheet.id}"):
+        st.markdown("**Mark a member apart from the group**")
+
+        who = st.selectbox(
+            "Member",
+            options=[m.student_email for m in group.members],
+            format_func=lambda email: next(
+                (
+                    m.student_name or m.student_email
+                    for m in group.members
+                    if m.student_email == email
+                ),
+                email,
+            ),
+        )
+        delta = st.number_input(
+            "Difference from the group's mark",
+            min_value=-float(sheet.max_marks),
+            max_value=float(sheet.max_marks),
+            value=0.0,
+            step=0.5,
+            help="Negative takes marks off this member, positive adds them. "
+            "The group's own total does not change.",
+        )
+        reason = st.text_area(
+            "Reason (required — the student sees this)",
+            placeholder="e.g. Wrote the documentation; the implementation was "
+            "done by the other member.",
+        )
+
+        if st.form_submit_button("Apply adjustment", type="primary"):
+            try:
+                with db() as session:
+                    adjust_member(
+                        actor,
+                        session,
+                        score_sheet_id=sheet.id,
+                        student_email=who,
+                        delta=Decimal(str(delta)),
+                        reason=reason,
+                    )
+                after_mutation("Adjustment recorded. The sheet needs approving again.")
+            except RubriQError as exc:
+                st.error(str(exc), icon=":material/error:")
+
+    if history:
+        st.markdown("**Every adjustment on this sheet**")
+        st.dataframe(
+            [
+                {
+                    "Member": entry["student_email"],
+                    "Change": f"{entry['delta']:+}",
+                    "Mark": f"{entry['total']}",
+                    "By": entry["by"],
+                    "When (IST)": to_ist(entry["at"]).strftime("%d %b, %I:%M %p"),
+                    "Reason": entry["reason"],
+                }
+                for entry in history
+            ],
+            hide_index=True,
+            width="stretch",
+        )
 
 
 def render_override_form(sheet) -> None:

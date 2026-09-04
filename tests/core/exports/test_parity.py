@@ -247,3 +247,66 @@ class TestWorkbookShape:
         widths = {len(row) for row in rows}
 
         assert len(widths) == 1, f"ragged TSV: rows have widths {widths}"
+
+
+class TestGroupColumns:
+    """Phase 9 — a member's own mark must reach the spreadsheet.
+
+    ``test_a_row_with_no_score_sheet_exports`` is a regression: adding the
+    group columns updated the scored branch of ``build_export_rows`` and not
+    the one for a student who never submitted, so the exporter raised a
+    TypeError on any milestone containing a non-submitter — which is most of
+    them. The parity tests above did not catch it because none of them export a
+    cohort with an empty row in it.
+    """
+
+    def test_a_row_with_no_score_sheet_exports(self, db_factory, world, graded) -> None:
+        from core.clock import utc_now
+        from core.db.engine import session_scope
+        from core.exports.rows import build_export_rows
+
+        with session_scope(db_factory) as session:
+            bundle = build_export_rows(
+                world.faculty_a,
+                session,
+                milestone_id=graded.milestone_id,
+                generated_at=utc_now(),
+            )
+
+        cells = bundle.cells()
+        assert len(cells) > 1, "the non-submitter still gets a row"
+        assert all(len(row) == len(cells[0]) for row in cells), "ragged grid"
+
+    def test_the_group_columns_exist(self, db_factory, world, graded) -> None:
+        from core.clock import utc_now
+        from core.db.engine import session_scope
+        from core.exports.rows import build_export_rows
+
+        with session_scope(db_factory) as session:
+            bundle = build_export_rows(
+                world.faculty_a,
+                session,
+                milestone_id=graded.milestone_id,
+                generated_at=utc_now(),
+            )
+
+        for header in ("Group", "Adjustment", "Adjustment Reason"):
+            assert header in bundle.headers
+
+    def test_adjustment_sits_before_final(self, db_factory, world, graded) -> None:
+        """A reader should meet the reason before the number it explains."""
+        from core.clock import utc_now
+        from core.db.engine import session_scope
+        from core.exports.rows import build_export_rows
+
+        with session_scope(db_factory) as session:
+            bundle = build_export_rows(
+                world.faculty_a,
+                session,
+                milestone_id=graded.milestone_id,
+                generated_at=utc_now(),
+            )
+
+        headers = list(bundle.headers)
+        assert headers.index("Adjustment") < headers.index("Final")
+        assert headers.index("Adjustment Reason") < headers.index("Final")

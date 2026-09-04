@@ -35,6 +35,7 @@ import subprocess
 import sys
 import tomllib
 from datetime import timedelta
+from decimal import Decimal
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -62,6 +63,7 @@ from core.db.models import (  # noqa: E402
     Enrollment,
     Evaluation,
     GroupMember,
+    MemberAdjustment,
     ProjectCycle,
     ProjectGroup,
     ReviewMilestone,
@@ -88,7 +90,11 @@ from core.rubrics.service import (  # noqa: E402
     publish_rubric,
 )
 from core.scoring.enums import Verdict  # noqa: E402
-from core.scoring.sheets import approve_sheet, save_manual_scores  # noqa: E402
+from core.scoring.sheets import (  # noqa: E402
+    adjust_member,
+    approve_sheet,
+    save_manual_scores,
+)
 from core.submissions.service import submit  # noqa: E402
 
 SECRETS = REPO_ROOT / ".streamlit" / "secrets.toml"
@@ -227,6 +233,7 @@ def reset(factory) -> None:
             CriterionScore,
             Evaluation,
             StudentQuery,
+            MemberAdjustment,
             SubmissionLink,
             SubmissionFile,
             Submission,
@@ -255,6 +262,7 @@ def build(settings: Settings) -> dict[str, int]:
         "github": 0,
         "submissions": 0,
         "links": 0,
+        "adjustments": 0,
         "approved": 0,
         "queries": 0,
     }
@@ -531,6 +539,25 @@ def build(settings: Settings) -> dict[str, int]:
             )
             sheet_id = sheet.id
 
+        # One member of the granted group is marked apart from it, so the
+        # Contribution tab and the Adjustment export column both have something
+        # to show. The adjustment comes first: it clears an approval, so
+        # approving afterwards is the order a faculty member would actually use.
+        if name in granted_members:
+            with session_scope(factory) as session:
+                adjust_member(
+                    faculty,
+                    session,
+                    score_sheet_id=sheet_id,
+                    student_email=_handle(granted_members[1]),
+                    delta=Decimal("-2.50"),
+                    reason=(
+                        "Wrote the documentation. The implementation and the "
+                        "ER diagram were done by the other member."
+                    ),
+                )
+                counts["adjustments"] += 1
+
         if name in approve_for:
             with session_scope(factory) as session:
                 approve_sheet(faculty, session, score_sheet_id=sheet_id)
@@ -642,6 +669,7 @@ def main() -> int:
         f"{counts['groups_pending']} awaiting approval"
     )
     print(f"  submissions {counts['submissions']} ({counts['links']} with a repo link)")
+    print(f"  adjustments {counts['adjustments']} (one group member marked apart)")
     print(f"  approved    {counts['approved']}")
     print(f"  questions   {counts['queries']}")
     print()

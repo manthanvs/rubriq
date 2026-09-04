@@ -61,6 +61,7 @@ Three problems, in the order they hurt:
 | O9 | Keep every mark traceable — who approved it, when, against which submission version and which rubric version |
 | O10 | Allow project groups, but only where a faculty member has granted them |
 | O11 | Accept a repository URL as part of a submission, only when it belongs to a GitHub account the guide already has on record |
+| O12 | Let a faculty member mark one member of a granted group apart from it, with a recorded reason |
 
 ## 4. Proposed system
 
@@ -140,7 +141,7 @@ Declared here so it is not ambushed in the viva:
 | AI model | Google Gemini (`gemini-3.6-flash`) behind a one-method provider protocol |
 | Evidence guard | `rapidfuzz.partial_ratio` |
 | Export | `openpyxl` |
-| Tests | `pytest` — 542 tests |
+| Tests | `pytest` — 584 tests |
 
 ## 7. Expected outcome
 

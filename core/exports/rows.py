@@ -53,6 +53,15 @@ class ExportRow:
     base_total: str
     penalty: str
     final_total: str
+
+    #: Empty for individual work. For a granted group, the group's name and —
+    #: when the member was marked apart from it — the signed adjustment and
+    #: its reason, so a mark that differs from a group-mate's is explicable in
+    #: the spreadsheet rather than only on screen.
+    group: str
+    member_adjustment: str
+    adjustment_reason: str
+
     provenance: str
     approved_by: str
     approved_at: str
@@ -88,9 +97,12 @@ class ExportBundle:
             "Submitted (IST)",
             "Days Late",
             "Status",
+            "Group",
             *self.criterion_codes,
             "Base",
             "Penalty",
+            "Adjustment",
+            "Adjustment Reason",
             "Final",
             "Provenance",
             "Approved By",
@@ -110,9 +122,12 @@ class ExportBundle:
                     row.submitted_at,
                     row.days_late,
                     row.status,
+                    row.group,
                     *[row.criteria.get(code, "") for code in self.criterion_codes],
                     row.base_total,
                     row.penalty,
+                    row.member_adjustment,
+                    row.adjustment_reason,
                     row.final_total,
                     row.provenance,
                     row.approved_by,
@@ -166,6 +181,9 @@ def build_export_rows(
                     ),
                     days_late="",
                     status=row.status_label,
+                    group=row.group_name or "",
+                    member_adjustment="",
+                    adjustment_reason="",
                     criteria={},
                     base_total="",
                     penalty="",
@@ -194,12 +212,19 @@ def build_export_rows(
                 ),
                 days_late=str(sheet.days_late),
                 status=status,
+                group=row.group_name or "",
+                member_adjustment=(
+                    f"{row.member_delta:+}" if row.member_delta is not None else ""
+                ),
+                adjustment_reason=row.member_reason or "",
                 criteria={c.code: f"{c.score}" for c in sheet.criteria},
                 base_total=f"{sheet.base_total}",
                 penalty=f"{sheet.penalty}",
-                # display_total, so an absent student is never a number here
-                # any more than on screen (fix item 10).
-                final_total=sheet.display_total,
+                # row.display_total, not sheet.display_total: for a member
+                # marked apart from their group (Phase 9) those differ, and the
+                # exporter must not disagree with the screen. It still renders
+                # ABSENT rather than a number (fix item 10).
+                final_total=row.display_total,
                 provenance=sheet.provenance,
                 approved_by=sheet.approved_by or "",
                 approved_at=(

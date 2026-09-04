@@ -117,6 +117,13 @@ class GridRow:
     #: Faculty need to be able to tell; the mark is the group's either way.
     submitted_by: str | None = None
 
+    #: This member's own total, when a faculty member has marked them apart
+    #: from their group (Phase 9). ``None`` means "whatever the group got",
+    #: which is the ordinary case and not a special one.
+    member_total: Decimal | None = None
+    member_delta: Decimal | None = None
+    member_reason: str | None = None
+
     @property
     def has_submitted(self) -> bool:
         return self.submission_id is not None
@@ -124,6 +131,28 @@ class GridRow:
     @property
     def is_group_work(self) -> bool:
         return self.group_name is not None
+
+    @property
+    def is_adjusted(self) -> bool:
+        """Whether this member was marked apart from their group."""
+        return self.member_delta is not None
+
+    @property
+    def display_total(self) -> str:
+        """What this row is actually worth, for the grid and both exporters.
+
+        One renderer, so a member's adjusted mark cannot appear on screen and
+        their group's appear in the Excel file. ABSENT still beats everything:
+        §5.1 says absence is a status, and an adjustment does not turn it into
+        a number.
+        """
+        if self.sheet is None:
+            return ""
+        if self.sheet.is_absent:
+            return "ABSENT"
+        if self.member_total is not None:
+            return f"{self.member_total}"
+        return self.sheet.display_total
 
     @property
     def needs_attention(self) -> bool:

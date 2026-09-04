@@ -1,6 +1,6 @@
 # Entity–Relationship Diagram
 
-Nineteen tables, defined in [`core/db/models.py`](../../core/db/models.py) and
+Twenty tables, defined in [`core/db/models.py`](../../core/db/models.py) and
 created by the migrations in [`alembic/versions/`](../../alembic/versions/).
 Attribute lists below are the columns that carry meaning; timestamps and
 `is_active` flags are omitted where they say nothing about the relationship.
@@ -12,6 +12,9 @@ Three things in this diagram are load-bearing and are easy to miss:
   retroactively change what an approved mark was measured against.
 * **`score_sheet` references an `evaluation`, never a bare submission.** A
   sheet is always the consequence of one specific evaluation run.
+* **`member_adjustment` stores a delta, never a replacement mark.** The group
+  is assessed once and every member starts from that sheet; a delta keeps the
+  baseline visible and stays meaningful when a criterion is corrected later.
 * **`verdict` lives on `criterion_score` as its own column.** It is stored,
   not derived from the score when rendering — that is what makes "followed
   versus not followed" answerable.
@@ -40,6 +43,8 @@ erDiagram
     CRITERION ||--o{ CRITERION_SCORE : "is scored as"
     EVALUATION ||--|| SCORE_SHEET : "totals into"
     SCORE_SHEET ||--o{ SCORE_OVERRIDE : "is corrected by"
+    SCORE_SHEET ||--o{ MEMBER_ADJUSTMENT : "is split by"
+    USERS ||--o{ MEMBER_ADJUSTMENT : "is adjusted"
     CRITERION ||--o{ SCORE_OVERRIDE : "is corrected on"
 
     USERS {
@@ -184,6 +189,16 @@ erDiagram
         datetime overridden_at
     }
 
+    MEMBER_ADJUSTMENT {
+        int      id PK
+        int      score_sheet_id FK
+        string   student_email FK
+        decimal  delta "signed, against the group total"
+        text     reason "non-empty, enforced in core"
+        string   adjusted_by FK
+        datetime adjusted_at
+    }
+
     LATE_POLICY {
         int    id PK
         string scope "SUBJECT | MILESTONE"
@@ -232,4 +247,5 @@ These are the ones that carry a rule rather than tidiness.
 | `UNIQUE (cycle_id, index)` | `review_milestone` | "Review 1" is a single milestone |
 | `UNIQUE (code, semester)` | `subject` | A subject code is unique within a semester |
 | `UNIQUE (scope, scope_id, version)` | `late_policy` | One policy version per scope |
+| *(no uniqueness)* | `member_adjustment` | Deliberately none — append-only, so two rows for one member are a change of mind and the latest is in force |
 | `FOREIGN KEYS = ON` | connection pragma | SQLite does not enforce foreign keys by default; without this the referential structure above is decorative |

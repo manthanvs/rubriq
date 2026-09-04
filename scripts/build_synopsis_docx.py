@@ -48,8 +48,7 @@ LINE_SPACING = 1.5
 # -- title page (template page 1) ----------------------------------------
 
 PROJECT_TITLE = (
-    "RubriQ – AI-Assisted Project Review & Rubric Evaluation System for "
-    "PCCOE Mentors"
+    "RubriQ – AI-Assisted Project Review & Rubric Evaluation System for PCCOE Mentors"
 )
 STUDENT_NAME = "Manthan Sankpal"
 PRN = "125M1H064"
@@ -123,10 +122,8 @@ EXISTING_SYSTEM = [
 ]
 
 EXISTING_PROBLEMS = [
-    "The student does not see the rubric before submitting, so they cannot "
-    "aim at it.",
-    "There is no record of why a particular mark was given. Only the number "
-    "survives.",
+    "The student does not see the rubric before submitting, so they cannot aim at it.",
+    "There is no record of why a particular mark was given. Only the number survives.",
     "Two reviewers, or the same reviewer on two different days, may score "
     "similar work differently.",
     "A student who submits four days late and a student who never submits at "
@@ -179,16 +176,12 @@ SCOPE_IN = [
     "the group. One submission then counts for all its members.",
     "The system prepares a suggested score for each rubric point, along with "
     "the supporting line from the student's document.",
-    "Late marks and absence are calculated automatically from a fixed rule "
-    "table.",
-    "Faculty can change any score, giving a reason, and then approve the "
-    "score sheet.",
-    "The approved marks can be downloaded as an Excel file or copied into a "
-    "spreadsheet.",
+    "Late marks and absence are calculated automatically from a fixed rule table.",
+    "Faculty can change any score, giving a reason, and then approve the score sheet.",
+    "The approved marks can be downloaded as an Excel file or copied into a spreadsheet.",
     "Students can ask questions about a review, answered from the rubric "
     "only, and passed to the guide when the answer is not there.",
-    "After approval, students can see which points they followed and which "
-    "they did not.",
+    "After approval, students can see which points they followed and which they did not.",
     "The system keeps a record of every action taken by every user.",
 ]
 
@@ -209,8 +202,7 @@ SCOPE_OUT = [
 OBJECTIVES = [
     "To let a faculty member create a rubric for each review, check that its "
     "weights add up to 100, and publish it so that it cannot be edited later.",
-    "To show the published rubric to the student before the submission is "
-    "made.",
+    "To show the published rubric to the student before the submission is made.",
     "To accept submissions in PDF, DOCX and TXT form, keep every version, and "
     "read out the text at the time of upload.",
     "To prepare a suggested score for every rubric point, with a line quoted "
@@ -329,8 +321,7 @@ FUNCTIONAL_REQUIREMENTS = [
     ),
     (
         "FR-7",
-        "The system shall refuse to publish a rubric whose weights do not add "
-        "up to 100.",
+        "The system shall refuse to publish a rubric whose weights do not add up to 100.",
     ),
     (
         "FR-8",
@@ -508,8 +499,7 @@ EXPECTED_OUTCOMES = [
     "containing exactly the numbers shown on the screen.",
     "A written feedback page for the student, listing what was followed and "
     "what was not.",
-    "A complete activity record showing who approved or changed each mark, "
-    "and when.",
+    "A complete activity record showing who approved or changed each mark, and when.",
     "A saving of time for the faculty member, because the first draft of the "
     "score sheet is already prepared and only needs to be checked.",
 ]
@@ -850,8 +840,7 @@ def build(out_path: Path) -> Path:
     heading(document, "c) Non-functional Requirements", level=2)
     para(
         document,
-        "These describe how well the system must work, rather than what it "
-        "must do.",
+        "These describe how well the system must work, rather than what it must do.",
     )
     two_column_table(
         document,

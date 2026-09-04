@@ -16,6 +16,7 @@ The §4 domain model lands one phase at a time. Present here:
 * ``StudentQuery`` — a question, its answer, and any escalation (Phase 6)
 * ``ProjectGroup`` / ``GroupMember`` — a faculty-granted group (Phase 8)
 * ``SubmissionLink`` — a repository URL bound to a registered profile (Phase 8)
+* ``MemberAdjustment`` — one member of a group marked apart from it (Phase 9)
 
 Every entity ships with its migration in the same commit (§12).
 
@@ -807,3 +808,50 @@ class SubmissionLink(Base):
 
     def __repr__(self) -> str:
         return f"<SubmissionLink {self.owner}/{self.repo}>"
+
+
+class MemberAdjustment(Base):
+    """One member of a granted group, marked apart from the rest of it.
+
+    A group's work is assessed once, so every member starts from the same score
+    sheet. What differs between them is *contribution*, and this records that —
+    as a signed delta against the group's total, never as a replacement mark.
+
+    The delta is deliberate. A replacement would silently detach from the group
+    assessment: correct a criterion later and the group's total moves while the
+    replacement sits at its old value, saying nothing about why. A delta stays
+    meaningful — "two marks less than the group earned, because X" — however the
+    baseline changes.
+
+    Append-only, exactly like :class:`ScoreOverride` (fix item 4): two
+    corrections for the same member produce two rows and the latest wins, so
+    the history answers who changed what, when, and why. ``reason`` is required
+    and the emptiness check lives in ``core/``.
+    """
+
+    __tablename__ = "member_adjustment"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    score_sheet_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("score_sheet.id"), nullable=False, index=True
+    )
+    student_email: Mapped[str] = mapped_column(
+        String(320), ForeignKey("users.email"), nullable=False, index=True
+    )
+
+    #: Signed, in marks. Negative reduces the member's share, positive raises it.
+    delta: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
+
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    adjusted_by: Mapped[str] = mapped_column(
+        String(320), ForeignKey("users.email"), nullable=False
+    )
+    adjusted_at: Mapped[datetime] = mapped_column(
+        UtcDateTime(),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+
+    def __repr__(self) -> str:
+        return f"<MemberAdjustment {self.student_email} {self.delta:+}>"

@@ -28,15 +28,17 @@ from core.auth.actor import Actor
 from core.db.models import (
     Enrollment,
     GroupMember,
+    MemberAdjustment,
     ProjectCycle,
     ProjectGroup,
     ReviewMilestone,
+    ScoreSheet,
     Submission,
     User,
 )
 from core.groups.enums import GroupStatus
 from core.scoring.dto import GridRow
-from core.scoring.sheets import sheet_for_submission
+from core.scoring.sheets import member_totals, sheet_for_submission
 
 
 def list_grid_rows(
@@ -90,6 +92,22 @@ def list_grid_rows(
         ).all()
     )
 
+    # One query for every adjustment in this milestone, rather than one per
+    # student inside the loop.
+    adjustment_rows = session.execute(
+        select(
+            MemberAdjustment.student_email,
+            MemberAdjustment.delta,
+            MemberAdjustment.reason,
+        )
+        .join(ScoreSheet, ScoreSheet.id == MemberAdjustment.score_sheet_id)
+        .join(Submission, Submission.id == ScoreSheet.submission_id)
+        .where(Submission.milestone_id == milestone_id)
+        .order_by(MemberAdjustment.id)
+    ).all()
+    adjustments = {email: delta for email, delta, _ in adjustment_rows}
+    reasons = {email: reason for email, _, reason in adjustment_rows}
+
     rows: list[GridRow] = []
 
     for student in students:
@@ -135,6 +153,17 @@ def list_grid_rows(
 
         target, sheet = graded if graded else (latest, None)
 
+        # Phase 9: a member marked apart from their group carries their own
+        # total. Absent from the mapping means "the group's total", which is
+        # the ordinary case rather than a special one.
+        member_total = member_delta = member_reason = None
+        if sheet is not None and group_id is not None:
+            totals = member_totals(actor, session, score_sheet_id=sheet.id)
+            if student.email in totals:
+                member_total = totals[student.email]
+                member_delta = adjustments.get(student.email)
+                member_reason = reasons.get(student.email)
+
         rows.append(
             GridRow(
                 student_email=student.email,
@@ -147,6 +176,9 @@ def list_grid_rows(
                 # version rather than silently rebinding to the new one.
                 has_newer_version=target.version < latest.version,
                 sheet=sheet,
+                member_total=member_total,
+                member_delta=member_delta,
+                member_reason=member_reason,
                 group_name=group_names.get(group_id) if group_id else None,
                 submitted_by=(
                     target.student_email

@@ -31,7 +31,9 @@ from core.db.models import (
     Criterion,
     CriterionScore,
     Evaluation,
+    GroupMember,
     LatePolicyRow,
+    MemberAdjustment,
     ProjectCycle,
     ReviewMilestone,
     Rubric,
@@ -42,7 +44,11 @@ from core.db.models import (
 )
 from core.errors import NotAuthorized, ValidationError
 from core.scoring.dto import CriterionScoreDTO, ScoreSheetDTO
-from core.scoring.engine import CriterionScoreInput, compute_score_sheet
+from core.scoring.engine import (
+    CriterionScoreInput,
+    apply_member_adjustment,
+    compute_score_sheet,
+)
 from core.scoring.enums import EvaluationEngine, EvaluationStatus, Verdict
 from core.scoring.policy import DEFAULT_LATE_POLICY, AttendanceStatus, LatePolicy
 
@@ -661,3 +667,203 @@ def override_history(
         }
         for override, code, name in rows
     )
+
+
+# -- per-member marks within a granted group (Phase 9) --------------------
+
+
+def _latest_adjustments(session: Session, score_sheet_id: int) -> dict[str, Decimal]:
+    """The delta currently in force for each member of this sheet's group.
+
+    Rows are append-only, so "in force" means the most recent row per student.
+    Reading it this way rather than summing keeps a correction a correction:
+    two rows for one member are a change of mind, not a double penalty.
+    """
+    rows = session.scalars(
+        select(MemberAdjustment)
+        .where(MemberAdjustment.score_sheet_id == score_sheet_id)
+        .order_by(MemberAdjustment.id)
+    ).all()
+
+    return {row.student_email: row.delta for row in rows}
+
+
+def member_totals(
+    actor: Actor, session: Session, *, score_sheet_id: int
+) -> dict[str, Decimal]:
+    """Each group member's own total for this sheet, after adjustment.
+
+    Members with no adjustment are absent from the result — the caller falls
+    back to the group's total for them, which is the point: an unadjusted
+    member is not a special case, they simply got what the group got.
+    """
+    sheet = session.get(ScoreSheet, score_sheet_id)
+    if sheet is None:
+        raise NotAuthorized("That score sheet does not exist, or is not yours.")
+
+    submission = session.get(Submission, sheet.submission_id)
+    get_milestone(actor, session, submission.milestone_id)
+
+    if actor.is_student:
+        _assert_member_or_owner(session, actor, submission)
+
+    return {
+        email: apply_member_adjustment(sheet.final_total, delta, sheet.max_marks)
+        for email, delta in _latest_adjustments(session, score_sheet_id).items()
+    }
+
+
+def _assert_member_or_owner(session: Session, actor: Actor, submission) -> None:
+    """A student may read adjustments on work that is theirs, or their group's."""
+    if submission.student_email == actor.email:
+        return
+
+    if submission.group_id is not None:
+        member = session.scalar(
+            select(GroupMember.id).where(
+                GroupMember.group_id == submission.group_id,
+                GroupMember.student_email == actor.email,
+            )
+        )
+        if member is not None:
+            return
+
+    raise NotAuthorized("You can only view your own marks.")
+
+
+def adjust_member(
+    actor: Actor,
+    session: Session,
+    *,
+    score_sheet_id: int,
+    student_email: str,
+    delta: Decimal | int | str,
+    reason: str,
+) -> ScoreSheetDTO:
+    """Mark one member of a granted group apart from the rest of it.
+
+    The group's assessment is untouched — this records a signed delta against
+    it, with a reason, exactly as :func:`override_criterion` records a change
+    to a criterion. Append-only, and if the sheet was approved the approval is
+    **cleared**: a member's published mark just moved, so a person has to own
+    it again (invariant #1).
+
+    Refused on a submission that is not group work. A "member adjustment" on an
+    individual submission is not a contribution decision, it is an unexplained
+    edit to a total, and :func:`override_criterion` is the honest way to make
+    one of those.
+    """
+    require_faculty(actor, "adjust a member's marks")
+
+    sheet = session.get(ScoreSheet, score_sheet_id)
+    if sheet is None:
+        raise NotAuthorized("That score sheet does not exist, or is not yours.")
+
+    submission = session.get(Submission, sheet.submission_id)
+    get_milestone(actor, session, submission.milestone_id)
+
+    if submission.group_id is None:
+        raise ValidationError(
+            "This submission is not group work, so there is no group to mark "
+            "anyone apart from. Override the criterion instead."
+        )
+
+    student_email = (student_email or "").strip().lower()
+    member = session.scalar(
+        select(GroupMember.id).where(
+            GroupMember.group_id == submission.group_id,
+            GroupMember.student_email == student_email,
+        )
+    )
+    if member is None:
+        raise ValidationError(f"{student_email} is not a member of this group.")
+
+    # Checked in core/, not merely marked required on the widget.
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValidationError(
+            "A member adjustment needs a reason. The student sees it, and it "
+            "is the only record of why they were marked apart from their group."
+        )
+
+    value = Decimal(str(delta))
+    if abs(value) > sheet.max_marks:
+        raise ValidationError(
+            f"An adjustment of {value:+} is larger than the milestone is worth "
+            f"({sheet.max_marks})."
+        )
+
+    session.add(
+        MemberAdjustment(
+            score_sheet_id=sheet.id,
+            student_email=student_email,
+            delta=value,
+            reason=reason,
+            adjusted_by=actor.email,
+        )
+    )
+
+    was_approved = sheet.approved_at is not None
+    if was_approved:
+        sheet.approved_by = None
+        sheet.approved_at = None
+
+    session.flush()
+
+    record(
+        session,
+        actor_email=actor.email,
+        action="member.adjusted",
+        entity="ScoreSheet",
+        entity_id=sheet.id,
+        payload={
+            "student_email": student_email,
+            "delta": str(value),
+            "group_total": str(sheet.final_total),
+            "member_total": str(
+                apply_member_adjustment(sheet.final_total, value, sheet.max_marks)
+            ),
+            "reason": reason,
+            "cleared_approval": was_approved,
+        },
+    )
+
+    return _sheet_dto(session, sheet)
+
+
+def member_adjustment_history(
+    actor: Actor, session: Session, score_sheet_id: int
+) -> list[dict]:
+    """Every adjustment ever made on this sheet, oldest first.
+
+    The whole history, not the effective value: "who marked this student down,
+    when, and why" is the question the record exists to answer.
+    """
+    require_faculty(actor, "read adjustment history")
+
+    sheet = session.get(ScoreSheet, score_sheet_id)
+    if sheet is None:
+        raise NotAuthorized("That score sheet does not exist, or is not yours.")
+
+    submission = session.get(Submission, sheet.submission_id)
+    get_milestone(actor, session, submission.milestone_id)
+
+    rows = session.scalars(
+        select(MemberAdjustment)
+        .where(MemberAdjustment.score_sheet_id == score_sheet_id)
+        .order_by(MemberAdjustment.id)
+    ).all()
+
+    return [
+        {
+            "student_email": row.student_email,
+            "delta": row.delta,
+            "total": apply_member_adjustment(
+                sheet.final_total, row.delta, sheet.max_marks
+            ),
+            "reason": row.reason,
+            "by": row.adjusted_by,
+            "at": row.adjusted_at,
+        }
+        for row in rows
+    ]

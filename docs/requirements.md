@@ -43,6 +43,14 @@ Paths are relative to the repository root.
 | FR-58 | Submission versions shall be numbered per group, so two members cannot each create a v1 | `core/submissions/service.py::submit` | `tests/core/groups/test_groups.py` |
 | FR-59 | No student shall be in two granted groups for one subject | `core/groups/service.py::_assert_no_double_grant` | `tests/core/groups/test_groups.py` |
 | FR-60 | The review grid shall keep one row per student, naming the group on it | `core/scoring/grid.py`, `app/components/review_grid.py` | `tests/app/test_review_grid.py` |
+| FR-67 | A faculty member shall be able to mark one member of a granted group apart from it, as a signed difference from the group's total | `core/scoring/sheets.py::adjust_member` | `tests/core/groups/test_member_marks.py` |
+| FR-68 | A member adjustment shall require a reason, which the student sees | `core/scoring/sheets.py::adjust_member` | `tests/core/groups/test_member_marks.py` |
+| FR-69 | An adjustment shall never take a member below zero or above the milestone maximum | `core/scoring/engine.py::apply_member_adjustment` | `tests/core/scoring/test_member_adjustment.py` |
+| FR-70 | An adjustment shall leave the group's own total unchanged | `core/scoring/sheets.py::adjust_member` | `tests/core/groups/test_member_marks.py` |
+| FR-71 | Adjusting a sheet that was already approved shall clear the approval | `core/scoring/sheets.py::adjust_member` | `tests/core/groups/test_member_marks.py` |
+| FR-72 | Adjustments shall be append-only, with the most recent in force and the whole history readable | `core/scoring/sheets.py::member_adjustment_history` | `tests/core/groups/test_member_marks.py` |
+| FR-73 | An adjustment shall not turn an ABSENT row into a number | `core/scoring/dto.py::GridRow.display_total` | `tests/core/groups/test_member_marks.py` |
+| FR-74 | The export shall carry each member's own mark, plus the group, the adjustment and its reason | `core/exports/rows.py` | `tests/core/exports/test_parity.py` |
 
 ### 1.2b Repository links (decision #6)
 
@@ -168,3 +176,4 @@ Paths are relative to the repository root.
 | O9 | FR-40, FR-51, FR-52, NFR-5 |
 | O10 | FR-53 – FR-60 |
 | O11 | FR-61 – FR-66 |
+| O12 | FR-67 – FR-74 |

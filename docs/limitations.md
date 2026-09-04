@@ -104,18 +104,21 @@ on their document — the intended behaviour rather than a gap, but worth saying
 plainly, because "the link was verified" is easy to hear as a stronger claim
 than it is.
 
-## 7. Groups share a mark, and cannot yet split one
+## 7. Group marking is per-member, but the split is a judgement
 
-Phase 8 added real groups: a faculty member grants them, a granted group
-submits once, and every member shares the version, the sheet and the approval
-while keeping their own row in the grid.
+Phase 9 closed the original limitation here. A faculty member can now mark one
+member of a granted group apart from the rest, as a signed difference from the
+group's total, with a reason the student sees. The group's own assessment is
+untouched, the adjustment is append-only, and adjusting an approved sheet
+clears the approval so someone has to sign it off again.
 
-**What is still missing** is differentiation *within* a group. Every member
-receives the same mark. There is no per-member contribution weighting and no
-way to record that one member wrote the implementation and another the
-documentation. Where a guide needs to mark members differently, the honest
-route today is to override a criterion with a reason — recorded and auditable,
-but it clears the approval for the whole group.
+**What remains a limitation** is that the split is a human judgement with
+nothing behind it. The system records *that* a guide decided one member
+contributed less, and *why they said* they decided it, but it has no evidence
+of contribution to check that against — no commit attribution, no per-section
+authorship, nothing. A repository link is recorded but never read (§6a), so
+even the obvious source of that evidence is unused. The honest position is that
+this feature makes an existing judgement auditable, not measurable.
 
 ## 8. One institute, one deployment
 
@@ -133,7 +136,7 @@ configuration rather than a constant.
 
 ## 10. What the tests do and do not prove
 
-542 tests pass, and it is worth being precise about what that means.
+584 tests pass, and it is worth being precise about what that means.
 
 **They do prove:** the scoring arithmetic matches §5.1 row by row and at every
 boundary; a published rubric cannot be edited; a student cannot reach another

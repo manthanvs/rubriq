@@ -8,7 +8,7 @@ has stopped being true is visible rather than plausible.
 | Document | Covers |
 |---|---|
 | [`synopsis.md`](synopsis.md) | Introduction, problem statement, objectives, scope with explicit in/out lists |
-| [`requirements.md`](requirements.md) | 66 functional and 13 non-functional requirements, numbered, each traced to code and to a test |
+| [`requirements.md`](requirements.md) | 74 functional and 13 non-functional requirements, numbered, each traced to code and to a test |
 | [`srs.md`](srs.md) | Assumptions, constraints, external interfaces, glossary |
 | [`design.md`](design.md) | The reasoning behind the diagrams |
 | [`implementation.md`](implementation.md) | Module-wise write-up |

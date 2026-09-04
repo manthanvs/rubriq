@@ -263,8 +263,18 @@ def submit(
     # Version numbering follows whoever owns the work. For a group that is the
     # group: if it were per student, two members would each create a "v1" and
     # "which version was graded" would stop having an answer.
+    #
+    # The uploader's own earlier rows are included as well, and that is not
+    # belt-and-braces. A student can submit individually and *then* have their
+    # group granted; those earlier rows carry no group_id, so numbering purely
+    # by group would restart at 1 and collide with their existing v1 on
+    # ``uq_submission_student_version``. Taking the union keeps versions
+    # monotonic across that transition.
     scope = (
-        Submission.group_id == group.id
+        or_(
+            Submission.group_id == group.id,
+            Submission.student_email == actor.email,
+        )
         if group is not None
         else Submission.student_email == actor.email
     )
