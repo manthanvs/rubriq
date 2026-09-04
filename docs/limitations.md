@@ -149,11 +149,14 @@ behaves under a real cohort's concurrent load; that the interface is pleasant
 to use. Those need a person, a spreadsheet, a load generator, and users
 respectively.
 
-Two manual cases are recorded as unverified in
-[`test-cases.md`](test-cases.md) — MT-16 (opening the export in Excel since
-Phase 4) and MT-18 (a live Gemini success path, which returned 503 under load
-during the session it was attempted). They are listed rather than quietly
-dropped.
+One manual case remains unverified in [`test-cases.md`](test-cases.md): MT-16,
+opening the exported `.xlsx` in Excel itself, which needs Excel and a person.
+MT-17 and MT-18 were closed against the live Gemini API on 5 September 2026 —
+a resumed run made zero model calls, and four seeded submissions evaluated
+end to end. What that run did *not* produce is a meaningful evidence-rejection
+rate: the seeded documents are short and clean, so the guard had almost
+nothing to reject. That number needs real submissions, and is listed here as
+an open measurement rather than a result.
 
 ---
 

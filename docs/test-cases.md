@@ -16,7 +16,7 @@ worth less than an assertion.
 make test
 ```
 
-**458 tests, all passing.** The full verbose run is checked in at
+**542 tests, all passing.** The full verbose run is checked in at
 [`test-report.txt`](test-report.txt); regenerate it with:
 
 ```bash
@@ -47,7 +47,10 @@ python -m pytest -o addopts="--strict-markers" -v --tb=short > docs/test-report.
 | `tests/core/test_actor_contract.py` | 5 | Reflection over `core/**`: every public service function takes `actor` first |
 | `tests/core/test_no_streamlit_in_core.py` | 3 | The architectural rule, enforced |
 | `tests/app/test_empty_states.py` | 39 | Fix item 13 — all 13 pages against an empty schema |
-| `tests/app/test_review_grid.py` | 23 | Fix item 12 — column order, pinning, overflow, `ABSENT` never a number |
+| `tests/app/test_review_grid.py` | 23 | Fix item 12 — column order, pinning, overflow, `ABSENT` never a number; the group column |
+| `tests/core/groups/test_groups.py` | 32 | Decision #5 — a pending request grants nothing, a granted group shares one submission |
+| `tests/core/submissions/test_links.py` | 35 | Decision #6 — URL parsing, lookalike hosts, ownership against the register |
+| `tests/core/submissions/test_link_submission.py` | 13 | Decision #6 end to end — a refused link writes no submission |
 | `tests/app/test_lateness_copy.py` | 11 | Fix item 10 — the student is told the band, not a generic penalty |
 | `tests/app/test_state.py` | 5 | Fix item 14 (P0 half) — no cache key without the actor's email |
 | `tests/test_smoke.py` | 11 | Settings, engine, session scope |
@@ -69,7 +72,8 @@ These are worth pointing at, because they are what stops the design eroding:
 
 ## 2. Manual test cases
 
-Executed against the seeded demo dataset (`make reseed`) on 3 September 2026.
+Executed against the seeded demo dataset (`make reseed`) on 3 September 2026;
+MT-17 and MT-18 re-run live against Gemini on 5 September 2026.
 
 | # | Case | Steps | Expected | Actual | Result |
 |---|---|---|---|---|---|
@@ -89,22 +93,43 @@ Executed against the seeded demo dataset (`make reseed`) on 3 September 2026.
 | MT-14 | Escalated question reaches the inbox | Open the faculty Dashboard | The waiting count is surfaced | *"1 student question(s) the assistant could not answer are waiting in your Query Inbox."* | **Pass** — verified in the browser |
 | MT-15 | Clone to populated system in one command | `make seed && make run` | A browsable, populated system with no manual setup | `students 8, submissions 8, approved 3, questions 3`; app served and browsed | **Pass** — Phase 7 exit criterion |
 | MT-16 | Export opens in Excel | Download the `.xlsx` from the Review Grid and open it | Frozen header, per-criterion columns, second sheet with evidence | Not re-run since the Phase 4 verification | **Not re-executed** |
-| MT-17 | Refresh mid-evaluation makes no duplicate model call | Start an AI run, refresh the browser mid-run | The run resumes; the provider log shows no repeat call for a completed batch | Verified in Phase 5b against a counting stub; not re-run against the live API | **Pass (stub)** |
-| MT-18 | Live Gemini evaluation, in-scope answer | Run an evaluation with a real key | Criteria scored with verified evidence | The provider returned 503 under load during the Phase 5b session; the failure path was exercised, the success path was not verified live | **Not verified** |
+| MT-17 | Refresh mid-evaluation makes no duplicate model call | Run an evaluation to completion, then re-enter the same `thread_id` | The resumed run replays from the checkpoint and calls the model zero times | Run 1: full node path, **1** live Gemini call, COMPLETE. Run 2 on `eval:3:8`: no nodes re-executed, **0** live calls, identical result | **Pass (live API)** |
+| MT-18 | Live Gemini evaluation, in-scope answer | Run evaluations against the seeded cohort with a real key | Criteria scored, evidence verified against the submitted text | 4/4 submissions completed on `gemini-3.6-flash`, 15–33 s each. Verdicts matched the seeded content: the one student whose file contains the SRS section scored C2 FOLLOWED; the rest returned C2/C3 `NO_EVIDENCE`, and the absent student rendered `ABSENT` rather than a number | **Pass (live API)** |
 
-### Notes on the two unverified rows
+### Notes on the remaining unverified row
 
-They are listed rather than quietly dropped.
+Listed rather than quietly dropped.
 
 * **MT-16** passed when the exporter was built in Phase 4 and is covered by
   `test_parity.py`, which asserts the XLSX cell grid equals the TSV one. What
   is *not* re-verified is that Excel itself opens the file and renders the
   frozen pane — that needs Excel and a person.
-* **MT-18** is a live-service dependency. The deterministic path, the schema
-  contract, the evidence guard, and the graph's retry behaviour are all
-  covered by tests against a stub provider, so what is unverified is
-  specifically "this model, today, returns usable content" — not any logic in
-  the system.
+
+### What the live run did and did not establish
+
+MT-17 and MT-18 were both closed against the real Gemini API, so it is worth
+being exact about what that bought.
+
+**It established:** the model returns content conforming to §6.5's contract;
+the graph completes on real responses; verdicts track the seeded content
+rather than being uniform; `ABSENT` survives an AI run untouched; and a
+resumed run genuinely replays from the checkpoint rather than re-calling the
+provider — the claim §6.2 makes for LangGraph, which until now had only been
+checked against a stub.
+
+**It did not establish a rejection rate.** Across these runs the guard rejected
+nothing, which is a weak result rather than a good one: the seeded submissions
+are short, clean text, and most criteria came back `NO_EVIDENCE` — a verdict
+that carries no span to check. A meaningful rejection rate needs longer, real
+documents where the model has room to paraphrase. The guard's *behaviour* is
+covered either way by `tests/core/ai/test_guards.py`, which rejects a
+fabricated span and accepts a reflowed genuine one.
+
+**Two failed runs happened first, and both were my instrument, not the system.**
+A provider wrapper written to count calls omitted an attribute the graph reads,
+so `evaluate` raised and the run was correctly marked `FAILED`. Worth recording
+because the failure looked exactly like a provider outage from the outside, and
+the first reading of it was wrong.
 
 ---
 
