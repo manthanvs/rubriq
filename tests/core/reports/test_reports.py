@@ -212,3 +212,82 @@ class TestScoping:
         with session_scope(db_factory) as session:
             with pytest.raises(NotAuthorized):
                 build_report(world.faculty_b, session, milestone_id=graded.milestone_id)
+
+
+class TestGroupMemberMarks:
+    """The class average must agree with the grid and the spreadsheet.
+
+    Found during the demo rehearsal: the Reports page averaged the *group's*
+    total for every member, so a member marked apart from their group counted
+    at the wrong figure and the mean disagreed with the exported file. Fix item
+    11's rule — one set of numbers wherever they are shown — applies to a chart
+    as much as to a column.
+    """
+
+    def test_the_mean_uses_the_members_own_mark(
+        self, db_factory, world, graded
+    ) -> None:
+        from decimal import Decimal
+
+        from core.db.models import Enrollment
+        from core.groups.service import create_group
+        from core.scoring.sheets import adjust_member
+        from core.submissions.service import submit
+
+        mate = "someone.else@pccoepune.org"
+
+        with session_scope(db_factory) as session:
+            session.add(Enrollment(student_email=mate, subject_id=world.subject_a))
+
+        with session_scope(db_factory) as session:
+            create_group(
+                world.faculty_a,
+                session,
+                subject_id=world.subject_a,
+                name="Team Alpha",
+                member_emails=[world.student_1.email, mate],
+            )
+
+        import tempfile
+        from pathlib import Path
+
+        uploads = Path(tempfile.mkdtemp())
+        with session_scope(db_factory) as session:
+            made = submit(
+                world.student_1,
+                session,
+                milestone_id=world.milestone_visible,
+                files={"a.txt": b"Our work."},
+                uploads_root=uploads,
+            )
+            submission_id = made.id
+
+        with session_scope(db_factory) as session:
+            sheet = save_manual_scores(
+                world.faculty_a, session, submission_id=submission_id, scores=FULL
+            )
+            sheet_id, group_total = sheet.id, sheet.final_total
+
+        with session_scope(db_factory) as session:
+            adjust_member(
+                world.faculty_a,
+                session,
+                score_sheet_id=sheet_id,
+                student_email=mate,
+                delta="-4.00",
+                reason="Documentation only.",
+            )
+
+        with session_scope(db_factory) as session:
+            report = build_report(
+                world.faculty_a, session, milestone_id=world.milestone_visible
+            )
+
+        expected = (
+            (group_total + (group_total - Decimal("4.00"))) / 2
+        ).quantize(Decimal("0.01"))
+
+        assert report.mean == expected, (
+            "the mean counted the group's total for the adjusted member"
+        )
+        assert report.lowest == group_total - Decimal("4.00")

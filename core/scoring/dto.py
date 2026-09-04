@@ -68,6 +68,22 @@ class ScoreSheetDTO:
         return self.attendance_status is AttendanceStatus.ABSENT
 
     @property
+    def member_mark(self) -> Decimal:
+        """What this row is worth, as a number, after any member adjustment.
+
+        The numeric counterpart of :attr:`display_total`, for callers that have
+        to do arithmetic — the reports page averaging a cohort, for instance.
+        Absence is still a status rather than a number, so an absent row is not
+        something this should be asked for; ``build_report`` filters those out
+        before it gets here.
+        """
+        if self.sheet is None:
+            return Decimal("0")
+        if self.member_total is not None:
+            return self.member_total
+        return self.sheet.final_total
+
+    @property
     def display_total(self) -> str:
         """One renderer for the total, used by the grid and both exporters.
 
@@ -136,6 +152,22 @@ class GridRow:
     def is_adjusted(self) -> bool:
         """Whether this member was marked apart from their group."""
         return self.member_delta is not None
+
+    @property
+    def member_mark(self) -> Decimal:
+        """What this row is worth, as a number, after any member adjustment.
+
+        The numeric counterpart of :attr:`display_total`, for callers that have
+        to do arithmetic — the reports page averaging a cohort, for instance.
+        Absence is still a status rather than a number, so an absent row is not
+        something this should be asked for; ``build_report`` filters those out
+        before it gets here.
+        """
+        if self.sheet is None:
+            return Decimal("0")
+        if self.member_total is not None:
+            return self.member_total
+        return self.sheet.final_total
 
     @property
     def display_total(self) -> str:

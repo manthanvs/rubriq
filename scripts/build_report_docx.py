@@ -60,7 +60,7 @@ REPORT_DIR = REPO_ROOT / "docs" / "report"
 
 TITLE = "RubriQ – AI-Assisted Project Review & Rubric Evaluation System for PCCOE Mentors"
 
-TESTS_TOTAL = 584
+TESTS_TOTAL = 626
 
 CERTIFICATE = (
     f"This is to certify that the Mini Project entitled “{TITLE}” has been "
@@ -353,7 +353,7 @@ DESIGN_PRINCIPLE = [
     "The rule is enforced by an automated test which searches every file under "
     "core for a Streamlit import and fails if it finds one.",
     "The rule is worth the discipline for three reasons. The domain becomes "
-    "testable without a browser, which is why 545 of the project's "
+    "testable without a browser, which is why 587 of the project's "
     f"{TESTS_TOTAL} tests need no interface at all. Access control becomes a "
     "property of a function signature — every service function takes the "
     "acting user as its first argument and filters the database query by it — "

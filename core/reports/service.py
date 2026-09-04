@@ -145,7 +145,14 @@ def build_report(actor: Actor, session: Session, *, milestone_id: int) -> Milest
 
     # Absences are a status, not a zero (§5.1) — excluded from the statistics
     # and reported on their own.
-    marks = [r.sheet.final_total for r in scored if not r.sheet.is_absent]
+    #
+    # ``member_mark`` rather than ``sheet.final_total``: a member of a granted
+    # group who was marked apart from it holds a different mark, and a class
+    # average that used the group's figure would disagree with both the review
+    # grid and the exported spreadsheet. Fix item 11's rule — one set of
+    # numbers, wherever they are shown — applies to a chart as much as to a
+    # column.
+    marks = [r.member_mark for r in scored if not r.sheet.is_absent]
 
     criteria: dict[str, dict] = {}
     for row in scored:

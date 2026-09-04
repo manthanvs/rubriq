@@ -8,6 +8,11 @@ testpaths = ["tests"]
 # anything and without sys.path juggling inside conftest.
 pythonpath = ["."]
 addopts = "-q --strict-markers"
+# --strict-markers is on, so every marker has to be declared here. That is
+# the point: a typo in a marker name silently skips a test otherwise.
+markers = [
+    "slow: spawns a subprocess or otherwise takes seconds rather than milliseconds",
+]
 
 [tool.ruff]
 line-length = 90

@@ -106,7 +106,14 @@ for criterion in sheet.criteria:
             f"**{criterion.verdict.glyph} {criterion.code} — {criterion.title}**"
         )
         head.caption(VERDICT_HELP[criterion.verdict])
-        mark.metric("", f"{criterion.score:g}/{criterion.max_score:g}")
+        # A real label, hidden rather than omitted: Streamlit warns that an
+        # empty one may become an exception, and a screen reader announcing
+        # "8/10" with no idea what it measures is the same problem.
+        mark.metric(
+            f"{criterion.code} score",
+            f"{criterion.score:g}/{criterion.max_score:g}",
+            label_visibility="collapsed",
+        )
 
         if criterion.rationale:
             st.write(criterion.rationale)

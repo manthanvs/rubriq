@@ -141,7 +141,7 @@ Declared here so it is not ambushed in the viva:
 | AI model | Google Gemini (`gemini-3.6-flash`) behind a one-method provider protocol |
 | Evidence guard | `rapidfuzz.partial_ratio` |
 | Export | `openpyxl` |
-| Tests | `pytest` — 584 tests |
+| Tests | `pytest` — 626 tests |
 
 ## 7. Expected outcome
 

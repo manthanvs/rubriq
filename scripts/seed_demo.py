@@ -63,6 +63,7 @@ from core.db.models import (  # noqa: E402
     Enrollment,
     Evaluation,
     GroupMember,
+    LatePolicyRow,
     MemberAdjustment,
     ProjectCycle,
     ProjectGroup,
@@ -224,29 +225,47 @@ def migrate() -> None:
     )
 
 
+#: Children before parents, so a delete never trips a foreign key. Declared
+#: at module scope rather than inline because tests/test_seed_reset.py checks
+#: this order against the schema — a list only the function can see is a list
+#: nothing can verify.
+RESET_ORDER = (
+    MemberAdjustment,
+    ScoreOverride,
+    ScoreSheet,
+    CriterionScore,
+    Evaluation,
+    StudentQuery,
+    SubmissionLink,
+    SubmissionFile,
+    Submission,
+    GroupMember,
+    ProjectGroup,
+    Criterion,
+    Rubric,
+    ReviewMilestone,
+    ProjectCycle,
+    Enrollment,
+    Subject,
+    # No foreign keys of its own, but it must still be cleared: a policy
+    # override left behind would silently change the marks the next seed
+    # produces, and nothing on screen would say why.
+    LatePolicyRow,
+    AuditLog,
+)
+
+
 def reset(factory) -> None:
-    """Remove seeded rows, newest table first so foreign keys stay satisfied."""
+    """Remove seeded rows, children before parents so foreign keys stay satisfied.
+
+    The order is load-bearing and easy to get wrong when a table is added: a
+    row must be deleted before anything it points at. ``MemberAdjustment``
+    references ``ScoreSheet``, so it belongs above it — placing it lower made
+    ``--reset`` succeed on a database with no adjustments in it and fail on the
+    next run, which is the worst way for this to break.
+    """
     with session_scope(factory) as session:
-        for model in (
-            ScoreOverride,
-            ScoreSheet,
-            CriterionScore,
-            Evaluation,
-            StudentQuery,
-            MemberAdjustment,
-            SubmissionLink,
-            SubmissionFile,
-            Submission,
-            GroupMember,
-            ProjectGroup,
-            Criterion,
-            Rubric,
-            ReviewMilestone,
-            ProjectCycle,
-            Enrollment,
-            Subject,
-            AuditLog,
-        ):
+        for model in RESET_ORDER:
             session.execute(delete(model))
         session.execute(delete(User))
 

@@ -16,7 +16,7 @@ worth less than an assertion.
 make test
 ```
 
-**584 tests, all passing.** The full verbose run is checked in at
+**626 tests, all passing.** The full verbose run is checked in at
 [`test-report.txt`](test-report.txt); regenerate it with:
 
 ```bash
@@ -91,8 +91,11 @@ MT-17 and MT-18 re-run live against Gemini on 5 September 2026.
 | MT-12 | Reports exclude absences from the mean | Open Reports on the seeded milestone | Mean is over scored, non-absent sheets only | `mean 16.08 · median 15.38 · range 9.88–21.88`, absent excluded, `1 student did not submit at all` | **Pass** — verified in the browser |
 | MT-13 | Weakest criterion is identified | Same page | The lowest-scoring criterion is named with its share | *"C1 — Problem statement and objectives is the weakest criterion at 66.0 % of its maximum, and 1 submission(s) had no evidence for it."* | **Pass** — verified in the browser |
 | MT-14 | Escalated question reaches the inbox | Open the faculty Dashboard | The waiting count is surfaced | *"1 student question(s) the assistant could not answer are waiting in your Query Inbox."* | **Pass** — verified in the browser |
+| MT-19 | `make reseed` is repeatable | Run it twice in succession | The second run succeeds | Passed after a fix — see D10 in the defect log. Now guarded by `tests/test_seed_reset.py` |  **Pass** |
+| MT-20 | The system works with no AI key | Remove the `[llm]` section and open every faculty page | Nothing raises; deterministic features unaffected | All eight faculty pages render with no exception | **Pass** — invariant #10, executed via `AppTest` |
+| MT-21 | Reports agree with the grid and the export | Compare the class mean against the exported marks | The same numbers appear everywhere | Passed after a fix — see D11 |  **Pass** |
 | MT-15 | Clone to populated system in one command | `make seed && make run` | A browsable, populated system with no manual setup | `students 8, submissions 8, approved 3, questions 3`; app served and browsed | **Pass** — Phase 7 exit criterion |
-| MT-16 | Export opens in Excel | Download the `.xlsx` from the Review Grid and open it | Frozen header, per-criterion columns, second sheet with evidence | Not re-run since the Phase 4 verification | **Not re-executed** |
+| MT-16 | Export opens in Excel | Build the `.xlsx` and inspect the workbook | Frozen header, per-criterion columns, second sheet with evidence | Filename `RubriQ_MCA33EL03_Review1_20260905`; sheets `Scores`, `Evidence`, `About`; freeze pane at `A2`; 19 columns including `Group`, `Adjustment`, `Adjustment Reason`; `ABSENT` as a status; the adjusted member exporting 9.13 rather than the group's 11.63 | **Pass (structure)** — opening it in Excel itself is still a human step |
 | MT-17 | Refresh mid-evaluation makes no duplicate model call | Run an evaluation to completion, then re-enter the same `thread_id` | The resumed run replays from the checkpoint and calls the model zero times | Run 1: full node path, **1** live Gemini call, COMPLETE. Run 2 on `eval:3:8`: no nodes re-executed, **0** live calls, identical result | **Pass (live API)** |
 | MT-18 | Live Gemini evaluation, in-scope answer | Run evaluations against the seeded cohort with a real key | Criteria scored, evidence verified against the submitted text | 4/4 submissions completed on `gemini-3.6-flash`, 15–33 s each. Verdicts matched the seeded content: the one student whose file contains the SRS section scored C2 FOLLOWED; the rest returned C2/C3 `NO_EVIDENCE`, and the absent student rendered `ABSENT` rather than a number | **Pass (live API)** |
 
@@ -100,10 +103,12 @@ MT-17 and MT-18 re-run live against Gemini on 5 September 2026.
 
 Listed rather than quietly dropped.
 
-* **MT-16** passed when the exporter was built in Phase 4 and is covered by
-  `test_parity.py`, which asserts the XLSX cell grid equals the TSV one. What
-  is *not* re-verified is that Excel itself opens the file and renders the
-  frozen pane — that needs Excel and a person.
+* **MT-16** is now verified as far as it can be without Excel. The workbook is
+  built and read back: the filename, the three sheets, the frozen pane, the
+  column list and the individual values are all checked, including that a group
+  member marked apart from their group exports their own mark. What remains
+  unverified is only that Excel itself renders the file — that needs Excel and
+  a person, and it is a two-minute check rather than a risk.
 
 ### What the live run did and did not establish
 
@@ -149,3 +154,6 @@ clean run is less credible than one that shows its failures.
 | D7 | A null in a numeric grid column rendered as the word `None`, which reads as a value | Phase 7 | `Base`, `Penalty`, and `Final` render as text through one path; nothing scored shows blank |
 | D8 | The Submit page said "a late penalty will apply" at ten days late, where §5.1 actually records ABSENT and requires reinstatement | Phase 7, MT-07 | The band is looked up and described; covered by `test_lateness_copy.py` |
 | D9 | `use_container_width` is deprecated and past its removal date | Phase 7 | Replaced with `width="stretch"` in all 16 call sites |
+| D10 | `make reseed` failed on its **second** run — a foreign key error, because `MemberAdjustment` was deleted after the `ScoreSheet` it references. Step 1 of the demonstration script | Viva rehearsal | Delete order corrected, extracted to `RESET_ORDER`, and checked against the schema by `tests/test_seed_reset.py`. That test immediately found a second gap: `late_policy` was never cleared at all, so a policy override would have survived a reseed and silently changed the marks |
+| D11 | The Reports page averaged the **group's** total for every member, so a member marked apart from their group counted at the wrong figure and the class mean disagreed with the exported file | Viva rehearsal | `GridRow.member_mark` — the numeric counterpart of `display_total` — is what the report averages |
+| D12 | A metric on the student Feedback page had an empty label. Streamlit warns this may become an exception, and a screen reader announced a bare score with no idea what it measured | Viva rehearsal | A real label, hidden with `label_visibility="collapsed"` |
