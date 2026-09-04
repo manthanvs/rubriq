@@ -30,6 +30,11 @@ from core.scoring.enums import EvaluationEngine, EvaluationStatus, Verdict
 from core.scoring.policy import AttendanceStatus
 
 IDENTITY = ("!", "PRN", "Name")
+
+#: Pinned, not merely present. "Group" joins the identity block because for
+#: a group row it *is* identity — the mark belongs to the group, and a name
+#: that scrolls away leaves a number nobody can attribute (decision #5).
+PINNED = ("!", "PRN", "Name", "Group")
 TOTALS = ("Base", "Penalty", "Final", "By")
 WHEN = datetime(2026, 9, 1, 10, 0, tzinfo=IST)
 
@@ -100,7 +105,14 @@ def sheet(
     )
 
 
-def row(*, prn: str = "125M1H064", scored: bool = True, **kwargs) -> GridRow:
+def row(
+    *,
+    prn: str = "125M1H064",
+    scored: bool = True,
+    group_name: str | None = None,
+    submitted_by: str | None = None,
+    **kwargs,
+) -> GridRow:
     return GridRow(
         student_email="manthan.sankpal@pccoepune.org",
         student_name="Manthan Sankpal",
@@ -110,6 +122,8 @@ def row(*, prn: str = "125M1H064", scored: bool = True, **kwargs) -> GridRow:
         submitted_at=WHEN if scored else None,
         has_newer_version=False,
         sheet=sheet(**kwargs) if scored else None,
+        group_name=group_name,
+        submitted_by=submitted_by,
     )
 
 
@@ -215,7 +229,7 @@ class TestColumnConfig:
     def test_identity_columns_are_pinned(self) -> None:
         config = grid_column_config(FakeRubric(2), ("C1", "C2"))
 
-        assert [name for name, c in config.items() if c.get("pinned")] == list(IDENTITY)
+        assert [name for name, c in config.items() if c.get("pinned")] == list(PINNED)
 
     def test_every_column_has_an_explicit_width(self) -> None:
         """Content-sized columns reflow the whole grid when one name is long."""
@@ -264,3 +278,36 @@ def test_the_grid_renders_a_full_cohort_shape() -> None:
         "No submission",
     ]
     assert list(frame["Final"]) == ["17.50", "17.50", "ABSENT", ""]
+
+
+class TestGroupColumn:
+    """Decision #5 — one row per student, with the group named on it."""
+
+    def test_a_cohort_with_no_groups_gets_no_group_column(self) -> None:
+        """A column of dashes in the busiest table in the system is noise."""
+        frame = build_frame((row(), row(prn="B")), ("C1",))
+
+        assert "Group" not in frame.columns
+
+    def test_the_column_appears_as_soon_as_one_row_is_group_work(self) -> None:
+        frame = build_frame((row(group_name="Team Alpha"), row(prn="B")), ("C1",))
+
+        assert list(frame["Group"]) == ["Team Alpha", "—"]
+
+    def test_it_sits_with_the_identity_block(self) -> None:
+        columns = tuple(build_frame((row(group_name="Team Alpha"),), ("C1",)).columns)
+
+        assert columns[:4] == ("!", "PRN", "Name", "Group")
+
+    def test_group_members_still_get_a_row_each(self) -> None:
+        """Collapsing a group to one row is how a member ends up unrecorded."""
+        frame = build_frame(
+            (
+                row(prn="A", group_name="Team Alpha"),
+                row(prn="B", group_name="Team Alpha"),
+            ),
+            (),
+        )
+
+        assert len(frame) == 2
+        assert list(frame["Group"]) == ["Team Alpha", "Team Alpha"]

@@ -110,9 +110,20 @@ class GridRow:
     has_newer_version: bool
     sheet: ScoreSheetDTO | None
 
+    #: Set when this row resolves to a granted group's submission (decision #5).
+    group_name: str | None = None
+
+    #: The group-mate who actually uploaded it, when that is not this student.
+    #: Faculty need to be able to tell; the mark is the group's either way.
+    submitted_by: str | None = None
+
     @property
     def has_submitted(self) -> bool:
         return self.submission_id is not None
+
+    @property
+    def is_group_work(self) -> bool:
+        return self.group_name is not None
 
     @property
     def needs_attention(self) -> bool:

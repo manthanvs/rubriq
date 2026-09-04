@@ -51,7 +51,7 @@ If a task appears to require breaking one, stop and ask.
 3. **Every AI criterion score must cite evidence** — a verbatim span from the submission. No span means `NO_EVIDENCE`, not a number.
 4. **Auth is restricted to `@pccoepune.org`**, verified server-side from the OIDC email claim. The `hd` hint passed to Google is a convenience, not the check.
 5. **Role is assigned server-side** from a seeded faculty allow-list. A user can never self-select "faculty".
-6. **Students never see another student's data.** Enforced in the query layer with a mandatory `actor` argument, not by hiding UI.
+6. **Students never see another student's data.** Enforced in the query layer with a mandatory `actor` argument, not by hiding UI. **One exception, added in Phase 8 (decision #5):** a member of a *faculty-granted* group can see that group's submission — that is what a group is. The widening lives in `granted_group_ids_for()`, is gated on `GRANTED`, and a merely *requested* group grants nothing.
 7. **Nothing is hard-deleted.** Submissions, evaluations and overrides are append-only and versioned. Re-evaluating creates a new version.
 8. **The AI never receives identity data.** Strip name/PRN before the call; send submission text + rubric only. Reattach after.
 9. **No Streamlit imports inside `core/`.** Ever. This is the load-bearing rule of the whole design.
@@ -82,7 +82,8 @@ If a task appears to require breaking one, stop and ask.
 ## 4. Domain model
 
 ```
-User (email PK, role: STUDENT|FACULTY|ADMIN, name, department, prn?, employee_id?)
+User (email PK, role: STUDENT|FACULTY|ADMIN, name, department, prn?,
+      employee_id?, github_username?)          ← set by faculty, not the student
 
 Subject (code, name, semester, owner_email → User)
   └── Enrollment (student_email, subject_id, batch, group_label?)
@@ -96,6 +97,8 @@ ProjectCycle (subject_id, title, academic_year)
   │
   └── Submission (milestone_id, student_email, submitted_at,
                   files[], text_extract, version, status)
+        ├── SubmissionLink (url, normalised_url, owner, repo, ref,
+        │                    matched_profile)        ← recorded, never fetched
         └── Evaluation (submission_id, version, engine: AI|MANUAL, status,
                         model_name, prompt_version, raw_response JSON, created_at)
               └── CriterionScore (evaluation_id, criterion_id, score, confidence,
@@ -106,6 +109,11 @@ ScoreSheet (submission_id, base_total, penalty, final_total, attendance_status,
   └── ScoreOverride (score_sheet_id, criterion_id, old, new, reason, by, at)
 
 LatePolicy (scope: SUBJECT|MILESTONE, scope_id, rules JSON, version)
+
+ProjectGroup (subject_id, name, status: REQUESTED|GRANTED|REJECTED,
+              requested_by?, requested_at?, decided_by?, decided_at?,
+              decision_note?)                       ← only GRANTED confers access
+  └── GroupMember (group_id, student_email)
 
 StudentQuery (student_email, milestone_id?, question, ai_answer, sources[],
               escalated: bool, faculty_reply?, replied_by?, replied_at?)
@@ -466,12 +474,29 @@ If 5b runs into trouble, 5a alone still gives you working AI evaluation — the 
 
 ---
 
+### Phase 8 — Groups and repository submissions ✅
+
+Settles decisions #5 and #6, which §13 had left open past Review 2.
+
+- `core/groups/` — request, grant, refuse, and the `GRANTED`-only scoping helper
+- `core/submissions/links.py` — GitHub URL parsing and the ownership check
+- `User.github_username`, `ProjectGroup`, `GroupMember`, `SubmissionLink`,
+  `Submission.group_id`, one Alembic migration
+- Faculty: Subjects → **Groups** and **GitHub** tabs; a pending-request count on
+  the dashboard; group and repository detail in the score drawer
+- Student: a group panel on Submit that says plainly when a request is still
+  pending, and a repository-link field
+- **Exit:** a named classmate on an ungranted request can read nothing; a
+  granted group's members share one submission, one sheet and one approval
+  while keeping a row each; a repository URL owned by anybody but a registered
+  profile is refused before a file is written
+
 ## 11. SDLC deliverables checklist
 
 The guidelines demand all SDLC components. These are tasks, not afterthoughts.
 
 - [x] **Synopsis** → `docs/synopsis.md`
-- [x] **Requirement analysis** → `docs/requirements.md` (52 FR, 12 NFR, each traced to a module and a test)
+- [x] **Requirement analysis** → `docs/requirements.md` (66 FR, 13 NFR, each traced to a module and a test)
 - [x] **SRS** → `docs/srs.md`
 - [x] **Design** → `docs/design.md` + `docs/diagrams/` (ER, DFD L0/L1, use case, architecture, evaluation state machine — all Mermaid, so they diff)
 - [x] **Implementation** → `docs/implementation.md`
@@ -512,8 +537,8 @@ The guidelines demand all SDLC components. These are tasks, not afterthoughts.
 | 3 | Calendar widget | `streamlit-calendar` vs agenda table | ✅ **Agenda table** — decided in Phase 2. The calendar is a supporting page, not the centrepiece, so a third-party FullCalendar wrapper is dependency risk spent in the wrong place. An agenda also answers the question students actually have ("when is my next deadline" is a sorted list, not a month grid), and sorting soonest-first makes lateness legible before it matters (fix item 10). Both roles call one function in `app/components/calendar.py`, so swapping it later touches one file. Reason recorded in that module's docstring. |
 | 4 | LLM provider | Gemini vs Groq | ✅ **Gemini** — decided in Phase 5a. Both are implemented behind the one-method `LLMProvider` protocol in `core/ai/provider.py` with their SDKs imported lazily, so switching is a `secrets.toml` change plus a `pip install`, not a code change. Model: `gemini-3.6-flash`, overridable via `[llm] model` in secrets — `gemini-2.0-flash`, named here originally, was already returning 404 by the time the provider was wired up, so the model is configuration rather than a constant. `response_mime_type="application/json"` is set so the §6.5 contract is enforced by the API as well as by the Pydantic schema. The key lives only in gitignored `.streamlit/secrets.toml`; with no key configured the app says AI evaluation is unavailable and everything deterministic still works (invariant #10). |
 | 4b | Criterion batching | one LLM call per criterion vs batched | start batched (cheaper, fewer rate-limit hits); split only if per-criterion accuracy is visibly worse |
-| 5 | Individual or group | solo vs modular split | affects §11 module-ownership section |
-| 6 | Submission types | PDF/DOCX only, or also GitHub URL | PDF/DOCX for Phase 3; URL is a Phase 7 stretch |
+| 5 | Individual or group | solo vs modular split | ✅ **Groups, but only under faculty grant** — decided in Phase 8. Both directions are supported because both happen: a student can *request* a group naming their partners, and a guide can *form* one outright. Only `GroupStatus.GRANTED` confers anything — a pending request changes nothing, which is the gate the decision asks for. A granted group submits once: versions are numbered per group, every member resolves to the same row and the same `ScoreSheet`, and approving it settles the mark for all of them. **One row per student is kept in the grid** — collapsing a group into a single row is how a member ends up with no record of their own. This is the one deliberate exception to invariant #6, confined to `granted_group_ids_for()` and gated on `GRANTED`; `tests/core/groups/test_groups.py` asserts the negatives (a named classmate sees nothing before the grant, a rejected group grants nothing, an enrolled non-member stays blind). Module ownership for §11 is unchanged: the `core/` package boundaries are still the split. |
+| 6 | Submission types | PDF/DOCX only, or also GitHub URL | ✅ **Both** — decided in Phase 8. A submission may carry files, repository links, or both. A link is accepted **only when its owner matches a GitHub account faculty recorded** for the submitter (or, on a granted group's submission, for a group-mate) — the profiles students already shared with their guide. The register is faculty-writable only: a check whose reference value is supplied by the party being checked is not a check. Parsing is generous about shape (browser URL, `.git` clone URL, SSH form, deep link with a ref) and strict about owner, and the host check rejects lookalikes including `github.com@evil.example`. **Nothing fetches the repository.** The link is an artifact — recorded, shown, exported — not a source of evidence: fetching would add a network dependency at upload time and invite the model to judge code it never saw, which §6.5's guard could not verify a span against. A link-only submission is therefore valid and extracts no text, so its criteria fall to `NO_EVIDENCE` honestly. Proof: `tests/core/submissions/test_links.py` and `test_link_submission.py`. |
 | 7 | Guide approval | title + synopsis sign-off from Dr. Arakerimath | **do before Phase 1** |
 | 8 | Database engine | PostgreSQL 16 vs SQLite | ✅ **SQLite** — decided during Phase 2, superseding §3's original choice. Postgres bought real concurrency and JSONB, neither of which this project needs: a single-guide review panel has no write contention worth a server, and every JSON column is read by primary key rather than searched by content. Against that, it cost an install, a service, and credentials on every machine the project has to run on — including whichever one the viva happens on. SQLite makes the database a file that can be copied, inspected, and shipped with the report. The engine is tuned rather than left on defaults (WAL, `busy_timeout`, `foreign_keys=ON`); see `core/db/engine.py`. **Limits, stated honestly:** one writer at a time, so this would not survive a real cohort submitting simultaneously — that belongs in §11's limitations, not hidden. Reversing it is a URL change plus reinstating `psycopg`, because nothing outside `core/db/` knows the dialect. |
 

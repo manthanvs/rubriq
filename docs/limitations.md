@@ -93,12 +93,29 @@ evidences a criterion; it says nothing about whether the submission is the
 student's own work. Two identical submissions score identically and the system
 will not notice.
 
-## 7. Group projects are modelled thinly
+### 6a. A repository link is checked for ownership, not for content
 
-`Enrollment` carries a `group_label`, but scoring is per student and per
-submission. There is no shared submission, no per-member contribution
-weighting, and no way to record that one member did the implementation and
-another the documentation.
+Decision #6 verifies that a submitted URL belongs to a GitHub account the guide
+recorded. It verifies nothing else. Nothing is fetched, so the system cannot
+tell whether the repository contains the project, contains anything at all, or
+was created five minutes before the deadline. A student who registers an
+account and links an empty repository under it passes the check and is scored
+on their document — the intended behaviour rather than a gap, but worth saying
+plainly, because "the link was verified" is easy to hear as a stronger claim
+than it is.
+
+## 7. Groups share a mark, and cannot yet split one
+
+Phase 8 added real groups: a faculty member grants them, a granted group
+submits once, and every member shares the version, the sheet and the approval
+while keeping their own row in the grid.
+
+**What is still missing** is differentiation *within* a group. Every member
+receives the same mark. There is no per-member contribution weighting and no
+way to record that one member wrote the implementation and another the
+documentation. Where a guide needs to mark members differently, the honest
+route today is to override a criterion with a reason — recorded and auditable,
+but it clears the approval for the whole group.
 
 ## 8. One institute, one deployment
 
@@ -116,13 +133,15 @@ configuration rather than a constant.
 
 ## 10. What the tests do and do not prove
 
-458 tests pass, and it is worth being precise about what that means.
+542 tests pass, and it is worth being precise about what that means.
 
 **They do prove:** the scoring arithmetic matches §5.1 row by row and at every
 boundary; a published rubric cannot be edited; a student cannot reach another
-student's data; approval cannot happen without a name; the evidence guard
-rejects fabricated spans and accepts reflowed genuine ones; the TSV and the
-XLSX agree cell for cell; every page renders on an empty database.
+student's data, and a group-mate cannot either until the group is granted;
+approval cannot happen without a name; the evidence guard rejects fabricated
+spans and accepts reflowed genuine ones; a repository URL owned by anybody but
+a registered account is refused before a file is written; the TSV and the XLSX
+agree cell for cell; every page renders on an empty database.
 
 **They do not prove:** that a language model's judgement is any good; that
 Excel renders the exported file the way it looks in the test; that the system
@@ -142,13 +161,13 @@ dropped.
 
 | # | Feature | Why it is next |
 |---|---|---|
-| 1 | GitHub URL submissions | Already flagged as a Phase 7 stretch (decision #6). Most projects live in a repository, and a commit history is evidence a PDF is not |
+| 1 | Reading a linked repository | Decision #6 records the URL; the next step is reading a README or a commit history from it, which is evidence a PDF is not. It needs a network call at upload time and an answer for what the evidence guard verifies against |
 | 2 | Rubric templates and a library | Faculty currently author every rubric from scratch. Templates per subject type would remove the largest piece of manual work |
 | 3 | Calibration across reviewers | With two reviewers on one cohort, the interesting question is where they disagree with each other and with the model. The data to answer it is already stored |
 | 4 | Entailment checking on evidence | Closes limitation §4 — the cited span *supports* the verdict, not merely exists |
 | 5 | Multimodal evaluation | Closes limitation §5 for diagrams, which for a project report is where a lot of the substance is |
 | 6 | Postgres and a real deployment | Closes limitations §1 and, partly, §2. Small change, real consequences |
-| 7 | Group submissions with contribution weighting | Closes limitation §7 |
+| 7 | Per-member contribution weighting within a group | Closes what remains of limitation §7 |
 | 8 | A student-facing rubric self-check before submission | The natural extension of showing the rubric first: let the student run the evidence guard against their own draft and see which criteria have nothing pointing at them |
 
 Item 8 is the one most in the spirit of the project. Everything RubriQ does

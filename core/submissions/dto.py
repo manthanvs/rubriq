@@ -23,6 +23,28 @@ class SubmissionFileDTO:
 
 
 @dataclass(frozen=True, slots=True)
+class SubmissionLinkDTO:
+    """A repository URL that passed the ownership check (decision #6).
+
+    ``matched_profile`` records *whose* registered account allowed it — the
+    submitter's own, or a granted group-mate's. Keeping it means "why was this
+    accepted" is answerable later without re-parsing a string.
+    """
+
+    id: int
+    url: str
+    normalised_url: str
+    owner: str
+    repo: str
+    ref: str | None
+    matched_profile: str
+
+    @property
+    def label(self) -> str:
+        return f"{self.owner}/{self.repo}" + (f" @ {self.ref}" if self.ref else "")
+
+
+@dataclass(frozen=True, slots=True)
 class SubmissionDTO:
     """One submission version.
 
@@ -42,6 +64,15 @@ class SubmissionDTO:
     text_extract_chars: int
     note: str | None
     files: tuple[SubmissionFileDTO, ...]
+    links: tuple[SubmissionLinkDTO, ...] = ()
+
+    #: Set when this submission is a granted group's work (decision #5).
+    group_id: int | None = None
+    group_name: str | None = None
+
+    @property
+    def is_group_work(self) -> bool:
+        return self.group_id is not None
 
     @property
     def is_latest(self) -> bool:

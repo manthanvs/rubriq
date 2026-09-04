@@ -14,6 +14,8 @@ The §4 domain model lands one phase at a time. Present here:
 * ``ScoreSheet`` / ``ScoreOverride`` — the approved mark and its history (Phase 4)
 * ``LatePolicyRow`` — a per-subject override of §5.1 (Phase 4)
 * ``StudentQuery`` — a question, its answer, and any escalation (Phase 6)
+* ``ProjectGroup`` / ``GroupMember`` — a faculty-granted group (Phase 8)
+* ``SubmissionLink`` — a repository URL bound to a registered profile (Phase 8)
 
 Every entity ships with its migration in the same commit (§12).
 
@@ -44,6 +46,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from core.auth.roles import Role
 from core.clock import utc_now
 from core.db.types import JSONColumn, UtcDateTime
+from core.groups.enums import GroupStatus
 from core.scoring.enums import EvaluationEngine, EvaluationStatus, Verdict
 from core.scoring.policy import AttendanceStatus
 from core.submissions.status import SubmissionStatus
@@ -77,6 +80,14 @@ class User(Base):
     department: Mapped[str | None] = mapped_column(String(120))
     prn: Mapped[str | None] = mapped_column(String(32), index=True)
     employee_id: Mapped[str | None] = mapped_column(String(32))
+
+    #: The student's GitHub account, as already shared with their guide.
+    #: Decision #6: a submitted repository URL is accepted only when its owner
+    #: matches this (or a granted group-mate's), so a URL cannot point at
+    #: somebody else's work. Set by faculty, never by the student — otherwise
+    #: the check is one the person being checked gets to configure.
+    #: 39 characters is GitHub's own maximum.
+    github_username: Mapped[str | None] = mapped_column(String(39))
 
     created_at: Mapped[datetime] = mapped_column(
         UtcDateTime(),
@@ -353,6 +364,17 @@ class Submission(Base):
     )
     student_email: Mapped[str] = mapped_column(
         String(320), ForeignKey("users.email"), nullable=False, index=True
+    )
+    #: Set when the submitting student belongs to a granted group, in which
+    #: case this row is the group's work: every member resolves to it in the
+    #: grid, and versions are numbered per group rather than per student.
+    #: ``student_email`` stays the uploader, so "who pressed submit" survives.
+    group_id: Mapped[int | None] = mapped_column(
+        # Named, because SQLite has to rebuild the table to add a foreign key
+        # and Alembic's batch mode refuses to add an anonymous constraint.
+        Integer,
+        ForeignKey("project_group.id", name="fk_submission_group"),
+        index=True,
     )
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     status: Mapped[SubmissionStatus] = mapped_column(
@@ -652,3 +674,136 @@ class StudentQuery(Base):
     def __repr__(self) -> str:
         state = "escalated" if self.escalated else "answered"
         return f"<StudentQuery {self.student_email} {state}>"
+
+
+class ProjectGroup(Base):
+    """A project group, which exists only because a faculty member said so.
+
+    Decision #5 in one sentence: *groups are accepted only under the teacher's
+    approval, grant, or request.* Both directions are supported — a student can
+    ask (``REQUESTED``) and a faculty member can create one outright (straight
+    to ``GRANTED``) — but only ``GRANTED`` confers anything. Nothing about a
+    pending request widens what its members can see.
+
+    Rejection is a status rather than a deletion (invariant #7), and it carries
+    its reason, so a student who was refused can be told why.
+    """
+
+    __tablename__ = "project_group"
+    __table_args__ = (
+        UniqueConstraint("subject_id", "name", name="uq_group_subject_name"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    subject_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("subject.id"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+
+    status: Mapped[GroupStatus] = mapped_column(
+        Enum(GroupStatus, native_enum=False, length=16),
+        nullable=False,
+        default=GroupStatus.REQUESTED,
+        index=True,
+    )
+
+    #: Who asked. Null when a faculty member created the group directly.
+    requested_by: Mapped[str | None] = mapped_column(
+        String(320), ForeignKey("users.email")
+    )
+    requested_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
+
+    #: Who decided, and when. Null while the request is still pending.
+    decided_by: Mapped[str | None] = mapped_column(String(320), ForeignKey("users.email"))
+    decided_at: Mapped[datetime | None] = mapped_column(UtcDateTime())
+    decision_note: Mapped[str | None] = mapped_column(Text)
+
+    created_at: Mapped[datetime] = mapped_column(
+        UtcDateTime(),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+
+    def __repr__(self) -> str:
+        return f"<ProjectGroup {self.name} {self.status}>"
+
+
+class GroupMember(Base):
+    """One student in one project group.
+
+    A student may appear in several *requested* groups — asking twice is not a
+    crime — but the service refuses to grant a group that would put anyone in
+    two granted groups for the same subject. That rule lives in the service
+    rather than a constraint because it spans rows the database cannot see in
+    one index.
+    """
+
+    __tablename__ = "group_member"
+    __table_args__ = (
+        UniqueConstraint("group_id", "student_email", name="uq_group_member"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    group_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("project_group.id"), nullable=False, index=True
+    )
+    student_email: Mapped[str] = mapped_column(
+        String(320), ForeignKey("users.email"), nullable=False, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        UtcDateTime(),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+
+    def __repr__(self) -> str:
+        return f"<GroupMember {self.student_email} in {self.group_id}>"
+
+
+class SubmissionLink(Base):
+    """A repository URL attached to a submission (decision #6).
+
+    Stored parsed as well as raw: ``owner`` is what the profile check matched
+    on, and keeping it means a later audit can see *why* the URL was accepted
+    without re-parsing a string that may since have been edited.
+
+    Nothing fetches the URL. It is an artifact of the submission — recorded,
+    shown to faculty, exported — not a source of evidence. Fetching would add a
+    network dependency at upload time and, worse, invite the model to judge
+    code it cannot actually read.
+    """
+
+    __tablename__ = "submission_link"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    submission_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("submission.id"), nullable=False, index=True
+    )
+
+    #: Exactly what the student typed, kept verbatim.
+    url: Mapped[str] = mapped_column(String(500), nullable=False)
+
+    #: The canonical https://github.com/<owner>/<repo> form.
+    normalised_url: Mapped[str] = mapped_column(String(500), nullable=False)
+
+    owner: Mapped[str] = mapped_column(String(39), nullable=False, index=True)
+    repo: Mapped[str] = mapped_column(String(100), nullable=False)
+    ref: Mapped[str | None] = mapped_column(String(255))
+
+    #: Which registered profile allowed it — the submitting student's own, or a
+    #: granted group-mate's. Recorded so "why was this accepted" is answerable.
+    matched_profile: Mapped[str] = mapped_column(
+        String(320), ForeignKey("users.email"), nullable=False
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        UtcDateTime(),
+        nullable=False,
+        default=utc_now,
+        server_default=func.now(),
+    )
+
+    def __repr__(self) -> str:
+        return f"<SubmissionLink {self.owner}/{self.repo}>"

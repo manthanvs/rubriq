@@ -1,6 +1,6 @@
 # Entity–Relationship Diagram
 
-Sixteen tables, defined in [`core/db/models.py`](../../core/db/models.py) and
+Nineteen tables, defined in [`core/db/models.py`](../../core/db/models.py) and
 created by the migrations in [`alembic/versions/`](../../alembic/versions/).
 Attribute lists below are the columns that carry meaning; timestamps and
 `is_active` flags are omitted where they say nothing about the relationship.

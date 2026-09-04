@@ -9,6 +9,12 @@ that happens.
 Rows are returned for **every enrolled student**, including those who have not
 submitted. A grid that silently omits non-submitters is how someone gets
 missed entirely.
+
+Decision #5 changes what "this student's submission" resolves to, not the shape
+of the grid: a member of a granted group resolves to the group's row, so every
+member shows the same version, the same sheet and the same mark. One row per
+student is kept deliberately — collapsing a group into a single row is how a
+member ends up with no record of their own.
 """
 
 from __future__ import annotations
@@ -19,7 +25,16 @@ from sqlalchemy.orm import Session
 from core.academics.access import require_faculty
 from core.academics.milestones import get_milestone
 from core.auth.actor import Actor
-from core.db.models import Enrollment, ProjectCycle, ReviewMilestone, Submission, User
+from core.db.models import (
+    Enrollment,
+    GroupMember,
+    ProjectCycle,
+    ProjectGroup,
+    ReviewMilestone,
+    Submission,
+    User,
+)
+from core.groups.enums import GroupStatus
 from core.scoring.dto import GridRow
 from core.scoring.sheets import sheet_for_submission
 
@@ -54,15 +69,41 @@ def list_grid_rows(
         .all()
     )
 
+    # One query for the whole cohort's granted groups, rather than one per
+    # student inside the loop.
+    membership = dict(
+        session.execute(
+            select(GroupMember.student_email, ProjectGroup.id)
+            .join(ProjectGroup, ProjectGroup.id == GroupMember.group_id)
+            .where(
+                ProjectGroup.subject_id == subject_id,
+                ProjectGroup.status == GroupStatus.GRANTED,
+            )
+        ).all()
+    )
+    group_names = dict(
+        session.execute(
+            select(ProjectGroup.id, ProjectGroup.name).where(
+                ProjectGroup.subject_id == subject_id,
+                ProjectGroup.status == GroupStatus.GRANTED,
+            )
+        ).all()
+    )
+
     rows: list[GridRow] = []
 
     for student in students:
+        group_id = membership.get(student.email)
+
+        scope = (
+            Submission.group_id == group_id
+            if group_id is not None
+            else Submission.student_email == student.email
+        )
+
         versions = session.scalars(
             select(Submission)
-            .where(
-                Submission.milestone_id == milestone_id,
-                Submission.student_email == student.email,
-            )
+            .where(Submission.milestone_id == milestone_id, scope)
             .order_by(Submission.version.desc())
         ).all()
 
@@ -77,6 +118,7 @@ def list_grid_rows(
                     submitted_at=None,
                     has_newer_version=False,
                     sheet=None,
+                    group_name=group_names.get(group_id) if group_id else None,
                 )
             )
             continue
@@ -105,6 +147,12 @@ def list_grid_rows(
                 # version rather than silently rebinding to the new one.
                 has_newer_version=target.version < latest.version,
                 sheet=sheet,
+                group_name=group_names.get(group_id) if group_id else None,
+                submitted_by=(
+                    target.student_email
+                    if target.student_email != student.email
+                    else None
+                ),
             )
         )
 

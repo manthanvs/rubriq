@@ -28,6 +28,10 @@ CORE = REPO_ROOT / "core"
 ACTOR_PARAM = "actor"
 SESSION_ANNOTATIONS = {"Session", "sqlalchemy.orm.Session"}
 
+#: A helper that returns a query decides scoping just as much as one that
+#: runs it — see :func:`_touches_the_database`.
+SELECT_ANNOTATIONS = {"Select", "sqlalchemy.Select"}
+
 #: Functions allowed to touch a Session without an actor, and why.
 #: Every entry must name a function that exists — see TestExemptionsAreHonest.
 EXEMPT: dict[str, str] = {
@@ -35,6 +39,14 @@ EXEMPT: dict[str, str] = {
     "core.audit.record": (
         "Infrastructure, not a service. Takes actor_email explicitly and is "
         "called from inside an already-scoped transaction."
+    ),
+    "core.groups.service.granted_group_ids_for": (
+        "A scoping primitive, not a service: it takes the email whose groups "
+        "are wanted and returns a subquery, exactly as visible_subject_ids "
+        "does with an actor. It cannot be called with an actor instead, "
+        "because faculty call it *about* a student. Every call site passes "
+        "either actor.email or a student the caller is already authorised for, "
+        "and the group tests assert the negative cases."
     ),
     "core.scoring.ai_runs.next_evaluation_version": (
         "Returns an integer derived from a submission id the caller already "
@@ -87,10 +99,21 @@ def _public_functions() -> list[tuple[str, ast.FunctionDef | ast.AsyncFunctionDe
 
 
 def _touches_the_database(func: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
-    return any(
+    """Whether this function can reach rows — directly, or by composing a query.
+
+    Taking a ``Session`` is the obvious case. Returning a ``Select`` is the
+    subtle one: a public helper that builds a scoping subquery decides what a
+    ``WHERE`` clause will let through, so it is exactly as load-bearing as the
+    service that uses it, and exactly as much a hole if it takes no actor.
+    Phase 8 added the first such helper, which is why this arm exists.
+    """
+    if any(
         _annotation_name(param.annotation) in SESSION_ANNOTATIONS
         for param in _parameters(func)
-    )
+    ):
+        return True
+
+    return _annotation_name(func.returns) in SELECT_ANNOTATIONS
 
 
 class TestActorContract:

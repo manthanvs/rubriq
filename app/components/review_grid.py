@@ -33,6 +33,8 @@ def build_frame(rows: tuple[GridRow, ...], codes: tuple[str, ...]) -> pd.DataFra
     ``codes`` is empty when the rubric is wide enough that the verdict block has
     been moved into its own table — see ``CRITERION_OVERFLOW``.
     """
+    grouped = any(r.is_group_work for r in rows)
+
     records = []
     for row in rows:
         sheet = row.sheet
@@ -40,6 +42,15 @@ def build_frame(rows: tuple[GridRow, ...], codes: tuple[str, ...]) -> pd.DataFra
             "!": "●" if row.needs_attention else "",
             "PRN": row.prn or "—",
             "Name": row.student_name or row.student_email,
+        }
+
+        # Only when the cohort actually has groups. A column of dashes for a
+        # subject where nobody works in one is noise in the busiest table in
+        # the system.
+        if grouped:
+            record["Group"] = row.group_name or "—"
+
+        record |= {
             "Ver": f"v{row.submission_version}" if row.submission_version else "",
             # Text, not a number: a row with nothing submitted has no days-late
             # at all, and a blank in a numeric column renders as a stray 0.
@@ -113,6 +124,11 @@ def grid_column_config(rubric, codes: tuple[str, ...]) -> dict:
         ),
         "PRN": st.column_config.TextColumn(width=110, pinned=True),
         "Name": st.column_config.TextColumn(width=170, pinned=True),
+        "Group": st.column_config.TextColumn(
+            width=130,
+            pinned=True,
+            help="A granted project group. Every member shares this mark.",
+        ),
         "Ver": st.column_config.TextColumn(width=60, help="Submission version graded."),
         "Days Late": st.column_config.TextColumn(width=90),
         "Status": st.column_config.TextColumn(width=130),

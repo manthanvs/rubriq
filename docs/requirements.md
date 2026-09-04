@@ -31,6 +31,30 @@ Paths are relative to the repository root.
 | FR-10 | Faculty shall create review milestones with a title, description, due date, maximum marks, and a visibility flag | `core/academics/milestones.py` | `tests/core/academics/test_isolation.py` |
 | FR-11 | Both roles shall see a milestone agenda sorted soonest-first, from one shared renderer | `app/components/calendar.py` | `tests/app/test_empty_states.py` (both calendar pages) |
 
+### 1.2a Project groups (decision #5)
+
+| # | Requirement | Implemented in | Proved by |
+|---|---|---|---|
+| FR-53 | A student shall be able to request a project group, naming its members | `core/groups/service.py::request_group` | `tests/core/groups/test_groups.py` |
+| FR-54 | A faculty member shall be able to form a group outright, granted on creation | `core/groups/service.py::create_group` | `tests/core/groups/test_groups.py` |
+| FR-55 | A group shall confer nothing until a faculty member who owns the subject grants it | `core/groups/service.py::grant_group`, `::granted_group_ids_for` | `tests/core/groups/test_groups.py` |
+| FR-56 | A refusal shall require a reason, which the student can read | `core/groups/service.py::reject_group` | `tests/core/groups/test_groups.py` |
+| FR-57 | A granted group's submission shall be visible to every member, and to nobody else | `core/submissions/service.py::_assert_can_see`, `::_belongs_to` | `tests/core/groups/test_groups.py` |
+| FR-58 | Submission versions shall be numbered per group, so two members cannot each create a v1 | `core/submissions/service.py::submit` | `tests/core/groups/test_groups.py` |
+| FR-59 | No student shall be in two granted groups for one subject | `core/groups/service.py::_assert_no_double_grant` | `tests/core/groups/test_groups.py` |
+| FR-60 | The review grid shall keep one row per student, naming the group on it | `core/scoring/grid.py`, `app/components/review_grid.py` | `tests/app/test_review_grid.py` |
+
+### 1.2b Repository links (decision #6)
+
+| # | Requirement | Implemented in | Proved by |
+|---|---|---|---|
+| FR-61 | A submission shall accept GitHub repository URLs alongside or instead of files | `core/submissions/service.py::submit` | `tests/core/submissions/test_link_submission.py` |
+| FR-62 | A URL shall be accepted only when its owner matches a GitHub account recorded by faculty for the submitter or a granted group-mate | `core/submissions/links.py::assert_owned` | `tests/core/submissions/test_links.py`, `test_link_submission.py` |
+| FR-63 | Only a faculty member shall be able to record a student's GitHub account | `core/groups/service.py::set_github_username` | `tests/core/groups/test_groups.py` |
+| FR-64 | A non-GitHub host, including a lookalike or credential-disguised one, shall be refused | `core/submissions/links.py::parse_github_url` | `tests/core/submissions/test_links.py` |
+| FR-65 | A refused URL shall leave no submission behind | `core/submissions/service.py::submit` | `tests/core/submissions/test_link_submission.py` |
+| FR-66 | The system shall not fetch, clone, or read a linked repository | `core/submissions/links.py` (no network code) | `tests/core/submissions/test_link_submission.py` |
+
 ### 1.3 Rubrics
 
 | # | Requirement | Implemented in | Proved by |
@@ -125,6 +149,7 @@ Paths are relative to the repository root.
 | NFR-10 | **Reproducibility of a run.** An evaluation shall record what produced it | `model_name`, `prompt_version`, `graph_version`, and the verbatim raw response | `tests/core/scoring/test_ai_runs.py` |
 | NFR-11 | **Setup cost.** A clone shall reach a populated system in one command | `make seed && make run`; SQLite means no server and no credentials | manual — MT-15 |
 | NFR-12 | **Privacy of student text.** No identity shall reach the model | Identity is stripped in the graph's `prepare` node, before the first token leaves the process | `tests/core/ai/test_guards.py` |
+| NFR-13 | **Scoping helpers are scoped too.** A public function that *builds* a query decides access as much as one that runs it | The actor-contract test flags any public `core/` function returning a `Select` without an actor; exemptions must state a reason | `tests/core/test_actor_contract.py` |
 
 ---
 
@@ -141,3 +166,5 @@ Paths are relative to the repository root.
 | O7 | FR-46 – FR-49 |
 | O8 | FR-41 – FR-44 |
 | O9 | FR-40, FR-51, FR-52, NFR-5 |
+| O10 | FR-53 – FR-60 |
+| O11 | FR-61 – FR-66 |

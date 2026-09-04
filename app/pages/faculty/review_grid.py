@@ -49,6 +49,7 @@ from core.scoring.sheets import (
     reinstate,
     save_manual_scores,
 )
+from core.submissions.service import get_submission
 
 VERDICT_CHOICES = [
     Verdict.FOLLOWED,
@@ -76,6 +77,30 @@ def reread_row(milestone_id: int, student_email: str) -> GridRow | None:
     return None
 
 
+def render_links(row: GridRow) -> None:
+    """Repository links, if any — recorded, never fetched (decision #6).
+
+    The caption says so out loud because the temptation to read a mark off a
+    repository nobody opened is exactly what the AI layer must not do.
+    """
+    if row.submission_id is None:
+        return
+
+    with db() as session:
+        submission = get_submission(actor, session, row.submission_id)
+
+    if not submission.links:
+        return
+
+    st.markdown("**Repository**")
+    for link in submission.links:
+        st.markdown(f"- [{link.label}]({link.normalised_url})")
+    st.caption(
+        "Verified as belonging to an account on record. Nothing is downloaded "
+        "from it — evidence still comes from the submitted document."
+    )
+
+
 @st.dialog("Score sheet", width="large")
 def score_drawer(row: GridRow, codes: tuple[str, ...], rubric, milestone_id: int) -> None:
     """The per-student drawer: score, override, approve."""
@@ -98,6 +123,16 @@ def score_drawer(row: GridRow, codes: tuple[str, ...], rubric, milestone_id: int
         f"Submission v{row.submission_version} · "
         f"{to_ist(row.submitted_at).strftime('%d %b %Y, %I:%M %p')} IST"
     )
+
+    if row.is_group_work:
+        uploader = f", uploaded by {row.submitted_by}" if row.submitted_by else ""
+        st.info(
+            f"Group work — **{row.group_name}**{uploader}. Approving this "
+            "sheet settles the mark for every member.",
+            icon=":material/group:",
+        )
+
+    render_links(row)
 
     if row.has_newer_version:
         # Fix item 2: never silently rebind an approval to work nobody read.

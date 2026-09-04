@@ -14,6 +14,7 @@ from datetime import datetime, time
 
 import streamlit as st
 
+from app.components.groups import group_table, render_pending_decisions
 from app.context import current_actor, db, get_settings
 from app.state import after_mutation, invalidate
 from core.academics.dto import SubjectDTO
@@ -37,7 +38,9 @@ from core.academics.subjects import (
     list_subjects,
 )
 from core.clock import IST
+from core.db.models import User
 from core.errors import RubriQError
+from core.groups.service import create_group, list_groups, set_github_username
 
 VERDICT_ICON = {
     ImportVerdict.NEW: "✅",
@@ -94,6 +97,143 @@ def render_roll(subject: SubjectDTO) -> None:
         width="stretch",
     )
     st.caption(f"{len(roll)} student(s) enrolled.")
+
+
+def render_groups(subject: SubjectDTO) -> None:
+    """Decision #5 — groups exist here, or they do not exist.
+
+    Requests and outright creation land on one page because they are the same
+    decision reached from two directions, and a faculty member should be able
+    to see both without remembering which one a particular group came from.
+    """
+    with db() as session:
+        groups = list_groups(actor, session, subject_id=subject.id)
+        roll = list_enrollments(actor, session, subject.id)
+
+    st.caption(
+        "A group is only a group once you grant it. Until then it changes "
+        "nothing: members cannot see each other's work and submissions stay "
+        "individual."
+    )
+
+    st.markdown("**Waiting on you**")
+    render_pending_decisions(actor, groups)
+
+    st.divider()
+    st.markdown("**All groups**")
+
+    if not groups:
+        st.info(
+            "No groups in this subject yet — form one below, or wait for a "
+            "student to ask.",
+            icon=":material/group_off:",
+        )
+    else:
+        st.dataframe(group_table(groups), hide_index=True, width="stretch")
+
+    if not roll:
+        st.caption("Enrol students before forming groups.")
+        return
+
+    st.divider()
+    with st.form(f"new_group_{subject.id}"):
+        st.markdown("**Form a group**")
+        name = st.text_input("Group name", placeholder="Team Alpha")
+        members = st.multiselect(
+            "Members",
+            options=[e.student_email for e in roll],
+            format_func=lambda email: next(
+                (
+                    f"{e.student_name or e.student_email} ({e.prn or '—'})"
+                    for e in roll
+                    if e.student_email == email
+                ),
+                email,
+            ),
+            help="A group you form here is granted immediately — you are the approval.",
+        )
+        note = st.text_input("Note (optional)", placeholder="Why this pairing.")
+
+        if st.form_submit_button("Create group", type="primary"):
+            try:
+                with db() as session:
+                    created = create_group(
+                        actor,
+                        session,
+                        subject_id=subject.id,
+                        name=name,
+                        member_emails=list(members),
+                        note=note,
+                    )
+                after_mutation(f"Created and granted {created.name}.")
+            except RubriQError as exc:
+                st.error(str(exc), icon=":material/error:")
+
+
+def render_github_register(subject: SubjectDTO) -> None:
+    """Decision #6 — the accounts a repository URL is checked against.
+
+    Faculty-only by design. The profiles are the ones students already shared
+    with their guide; letting a student type their own would make the
+    ownership check something the person being checked configures.
+    """
+    with db() as session:
+        roll = list_enrollments(actor, session, subject.id)
+
+    if not roll:
+        st.info(
+            "Nobody enrolled yet — use the Import students tab.",
+            icon=":material/group_off:",
+        )
+        return
+
+    st.caption(
+        "A submitted repository link is accepted only if it belongs to the "
+        "account recorded here. A student with no account on record cannot "
+        "submit a link at all."
+    )
+
+    missing = [e for e in roll if not _github_of(e.student_email)]
+    if missing:
+        st.warning(
+            f"{len(missing)} of {len(roll)} students have no GitHub account on record.",
+            icon=":material/link_off:",
+        )
+
+    for entry in roll:
+        current = _github_of(entry.student_email)
+        cols = st.columns([3, 2, 1])
+        cols[0].markdown(
+            f"{entry.student_name or entry.student_email}  \
+"
+            f"<small>{entry.prn or '—'}</small>",
+            unsafe_allow_html=True,
+        )
+        typed = cols[1].text_input(
+            "GitHub account",
+            value=current or "",
+            key=f"gh_{entry.student_email}",
+            label_visibility="collapsed",
+            placeholder="github username",
+        )
+        if cols[2].button("Save", key=f"ghs_{entry.student_email}"):
+            try:
+                with db() as session:
+                    set_github_username(
+                        actor,
+                        session,
+                        student_email=entry.student_email,
+                        username=typed,
+                    )
+                after_mutation(f"Recorded GitHub for {entry.student_email}.")
+            except RubriQError as exc:
+                st.error(str(exc), icon=":material/error:")
+
+
+def _github_of(student_email: str) -> str | None:
+    """The account on record, read fresh rather than cached in the widget."""
+    with db() as session:
+        return session.get(User, student_email).github_username
 
 
 def render_cycle_form(subject: SubjectDTO) -> None:
@@ -311,12 +451,16 @@ else:
         ),
     )
 
-    roll_tab, milestones_tab, import_tab = st.tabs(
-        ["Roll", "Milestones", "Import students"]
+    roll_tab, groups_tab, github_tab, milestones_tab, import_tab = st.tabs(
+        ["Roll", "Groups", "GitHub", "Milestones", "Import students"]
     )
 
     with roll_tab:
         render_roll(chosen)
+    with groups_tab:
+        render_groups(chosen)
+    with github_tab:
+        render_github_register(chosen)
     with milestones_tab:
         render_milestones(chosen)
     with import_tab:

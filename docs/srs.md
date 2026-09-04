@@ -58,6 +58,8 @@ server-side, on every request, from configuration.
 | A5 | The deadline is meaningful in IST | All lateness is computed on the `Asia/Kolkata` calendar date |
 | A6 | The rubric is authored before submissions open | Evaluation requires a published rubric; without one the grid says so and stops |
 | A7 | The language model may be slow, rate-limited, or absent | Everything deterministic still works; evaluation queues and is retryable (NFR-3) |
+| A8 | Students' GitHub accounts are already known to their guide | A student with no account on record cannot submit a repository link at all, and is told to ask their guide rather than to try another URL |
+| A9 | Group composition is a teaching decision | Nothing is a group until a faculty member grants it; a student's request is recorded and inert until then |
 
 ## 5. Constraints
 
@@ -89,6 +91,10 @@ server-side, on every request, from configuration.
   returns structured output. It cannot query the database, read a file, or
   search. Giving it tools would breach both the isolation and the
   identity-stripping requirements in one move.
+* **Nothing fetches a linked repository.** A submitted GitHub URL is stored and
+  displayed, never retrieved. That keeps upload free of a network dependency,
+  and keeps the model from appearing to judge code it never saw — evidence has
+  to be a span the guard can verify against text the student submitted.
 * **No mark arithmetic outside `core/scoring/`.** Not in the UI, not in the
   exporters, not in the reports page.
 
@@ -99,7 +105,9 @@ server-side, on every request, from configuration.
 Thirteen pages, built from a role-filtered list (`core/auth/pages.py`):
 
 **Faculty** — Dashboard, Subjects, Rubric Builder, Calendar, Review Grid,
-Query Inbox, Reports, Activity.
+Query Inbox, Reports, Activity. Groups and the GitHub register live as
+tabs inside Subjects rather than as pages of their own: they are answers to
+"who is in this subject", which is what that page already owns.
 **Student** — Dashboard, Calendar, Submit, Feedback, Ask RubriQ.
 
 The calendar and the rubric display are shared components called by both

@@ -59,6 +59,8 @@ Three problems, in the order they hurt:
 | O7 | Export an approved score sheet to Excel, and to a clipboard-pastable form, with identical numbers |
 | O8 | Answer student questions about a milestone from its rubric alone, escalating to faculty rather than inventing an answer |
 | O9 | Keep every mark traceable — who approved it, when, against which submission version and which rubric version |
+| O10 | Allow project groups, but only where a faculty member has granted them |
+| O11 | Accept a repository URL as part of a submission, only when it belongs to a GitHub account the guide already has on record |
 
 ## 4. Proposed system
 
@@ -90,6 +92,11 @@ one module, with a table-driven test behind it.
 * Rubric authoring with weight validation, publish-freezes-version semantics,
   and cloning a published rubric to a new draft
 * Student submission with version history and server-side text extraction
+* Project groups, requested by a student or formed by the guide, and
+  active only once granted — a granted group submits once and every
+  member shares the version, the sheet and the approval
+* GitHub repository links, accepted only when owned by an account the
+  faculty member recorded for that student or a granted group-mate
 * AI evaluation against a published rubric, with a fuzzy-match evidence guard
   that demotes unverifiable claims to `NO_EVIDENCE`
 * Deterministic late-penalty and absence policy
@@ -114,6 +121,10 @@ Declared here so it is not ambushed in the viva:
 * Production cloud deployment with real student data
 * Real-time collaborative editing
 * Reels-style deep content analysis of images or video inside a submission
+* **Fetching, cloning, or reading the contents of a linked repository.**
+  A repository URL is recorded and shown; it is never downloaded. Marks
+  come from evidence in the submitted document, because a span the
+  guard cannot verify is not evidence
 
 ## 6. Technology
 
@@ -129,7 +140,7 @@ Declared here so it is not ambushed in the viva:
 | AI model | Google Gemini (`gemini-3.6-flash`) behind a one-method provider protocol |
 | Evidence guard | `rapidfuzz.partial_ratio` |
 | Export | `openpyxl` |
-| Tests | `pytest` — 458 tests |
+| Tests | `pytest` — 542 tests |
 
 ## 7. Expected outcome
 

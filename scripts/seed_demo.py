@@ -13,7 +13,12 @@ this seeds a cohort that exercises the interesting states —
 * some sheets approved, some left as estimates, one blocked by a mandatory
   criterion at ``NO_EVIDENCE``;
 * one student who never submitted, because that row must appear in the grid;
-* an escalated question waiting in the faculty inbox.
+* an escalated question waiting in the faculty inbox;
+* one **granted** project group and one request still **waiting** for the
+  guide, so decision #5's gate is visible from both sides at once;
+* GitHub accounts on record, and one submission carrying a repository link,
+  so decision #6 can be demonstrated — including the refusal, by trying a
+  link the register does not cover.
 
 No LLM is called. Scores are written through the same manual-scoring service a
 faculty member uses, so the seeded data is indistinguishable from real use and
@@ -56,7 +61,9 @@ from core.db.models import (  # noqa: E402
     CriterionScore,
     Enrollment,
     Evaluation,
+    GroupMember,
     ProjectCycle,
+    ProjectGroup,
     ReviewMilestone,
     Rubric,
     ScoreOverride,
@@ -65,7 +72,13 @@ from core.db.models import (  # noqa: E402
     Subject,
     Submission,
     SubmissionFile,
+    SubmissionLink,
     User,
+)
+from core.groups.service import (  # noqa: E402
+    create_group,
+    request_group,
+    set_github_username,
 )
 from core.queries.dto import QueryAnswer  # noqa: E402
 from core.queries.service import ask, reply  # noqa: E402
@@ -94,6 +107,22 @@ COHORT: tuple[tuple[str, str, int | None], ...] = (
     ("Rohit Jadhav", "125M1H076", 0),
     ("Neha Pawar", "125M1H077", None),  # never submitted
 )
+
+#: The GitHub accounts faculty have on record (decision #6). Deliberately not
+#: everyone: a student with no account on record cannot submit a link at all,
+#: and that refusal is worth being able to show.
+GITHUB = {
+    "Manthan Sankpal": "manthan-vs",
+    "Rahul Deshmukh": "rahul-d",
+    "Priya Kulkarni": "priya-k",
+    "Aditi Joshi": "aditi-j",
+}
+
+#: Granted by the guide. Both members submit as one.
+GRANTED_GROUP = ("Team Synapse", ("Priya Kulkarni", "Aditi Joshi"))
+
+#: Asked for, and still waiting — so the gate is visible, not just described.
+PENDING_GROUP = ("Team Lumen", ("Sneha More", "Rohit Jadhav"))
 
 SYNOPSIS = """\
 RubriQ — Mini Project Synopsis
@@ -198,8 +227,11 @@ def reset(factory) -> None:
             CriterionScore,
             Evaluation,
             StudentQuery,
+            SubmissionLink,
             SubmissionFile,
             Submission,
+            GroupMember,
+            ProjectGroup,
             Criterion,
             Rubric,
             ReviewMilestone,
@@ -216,7 +248,16 @@ def build(settings: Settings) -> dict[str, int]:
     """Create the dataset. Returns a summary for printing."""
     factory = build_session_factory(build_engine(settings))
     faculty = _actor(FACULTY, Role.FACULTY, FACULTY_NAME)
-    counts = {"students": 0, "submissions": 0, "approved": 0, "queries": 0}
+    counts = {
+        "students": 0,
+        "groups_granted": 0,
+        "groups_pending": 0,
+        "github": 0,
+        "submissions": 0,
+        "links": 0,
+        "approved": 0,
+        "queries": 0,
+    }
 
     # -- faculty, subject, cycle -------------------------------------
     with session_scope(factory) as session:
@@ -335,15 +376,70 @@ def build(settings: Settings) -> dict[str, int]:
         )
         counts["students"] = len(result.committable)
 
+    # -- GitHub register and groups (decisions #6 and #5) ----------------
+    with session_scope(factory) as session:
+        for name, handle in GITHUB.items():
+            set_github_username(
+                faculty, session, student_email=_handle(name), username=handle
+            )
+        counts["github"] = len(GITHUB)
+
+    with session_scope(factory) as session:
+        granted_name, granted_members = GRANTED_GROUP
+        create_group(
+            faculty,
+            session,
+            subject_id=subject_id,
+            name=granted_name,
+            member_emails=[_handle(n) for n in granted_members],
+            note="Shared implementation, agreed at the proposal stage.",
+        )
+        counts["groups_granted"] = 1
+
+    with session_scope(factory) as session:
+        pending_name, pending_members = PENDING_GROUP
+        asker = _actor(_handle(pending_members[0]), Role.STUDENT, pending_members[0])
+        request_group(
+            asker,
+            session,
+            subject_id=subject_id,
+            name=pending_name,
+            member_emails=[_handle(n) for n in pending_members],
+        )
+        counts["groups_pending"] = 1
+
     # -- submissions ----------------------------------------------------
     uploads = settings.uploads_root
+
+    #: Whoever submits first for the granted group submits for both, so the
+    #: second member must not create a second row.
+    group_submitted = False
+
+    _, granted_members = GRANTED_GROUP
 
     for name, _prn, late in COHORT:
         if late is None:
             continue
 
+        # One submission per group, not one per member: the second member's
+        # upload would be v2 of the same work rather than a second row, and
+        # seeding that would make the demo look like a duplicate.
+        if name in granted_members:
+            if group_submitted:
+                continue
+            group_submitted = True
+
         student = _actor(_handle(name), Role.STUDENT, name)
         body = SYNOPSIS if name != "Rahul Deshmukh" else SYNOPSIS + SRS_EXTRA
+
+        # One submission carries a repository link, so the faculty drawer and
+        # the student history both have one to show.
+        handle = GITHUB.get(name)
+        links = (
+            [f"https://github.com/{handle}/rubriq-mini-project"]
+            if handle and name == "Manthan Sankpal"
+            else []
+        )
 
         with session_scope(factory) as session:
             created = submit(
@@ -353,8 +449,10 @@ def build(settings: Settings) -> dict[str, int]:
                 files={"synopsis.txt": body.encode()},
                 uploads_root=uploads,
                 note=None if late == 0 else "Sorry this is late.",
+                links=links,
             )
             counts["submissions"] += 1
+            counts["links"] += len(links)
             submission_id = created.id
 
         # A version history for one student, so the stale-version banner and
@@ -538,13 +636,20 @@ def main() -> int:
 
     print()
     print(f"  students    {counts['students']}")
-    print(f"  submissions {counts['submissions']}")
+    print(f"  github      {counts['github']} accounts on record")
+    print(
+        f"  groups      {counts['groups_granted']} granted, "
+        f"{counts['groups_pending']} awaiting approval"
+    )
+    print(f"  submissions {counts['submissions']} ({counts['links']} with a repo link)")
     print(f"  approved    {counts['approved']}")
     print(f"  questions   {counts['queries']}")
     print()
     print("Seeded: one on-time, one late, one two days late, one absent,")
     print("one never submitted, one blocked on a mandatory criterion,")
-    print("one version history, and an escalated question awaiting a reply.")
+    print("one version history, one granted group submitting as one, one")
+    print("group request still waiting on the guide, one repository link on")
+    print("record, and an escalated question awaiting a reply.")
     print()
 
     if wrote_secrets:
