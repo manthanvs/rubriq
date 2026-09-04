@@ -1,28 +1,34 @@
 # Report
 
+Both documents here are **generated, never hand-edited**. The eight documents in
+[`../`](..) are the source of truth; edit those and rebuild.
+
+| File | Built by | Command |
+|---|---|---|
+| `RubriQ_Synopsis.docx` | `scripts/build_synopsis_docx.py` | `make synopsis` |
+| `RubriQ_Report.docx` | `scripts/build_report_docx.py` | `make report` |
+
+Both use the formatting the department specified for the synopsis — Times New
+Roman, 14 pt headings, 12 pt body, 1.5 line spacing, justified.
+
 ## Synopsis
 
-[`RubriQ_Synopsis.docx`](RubriQ_Synopsis.docx) — written in the department's own
-template (`Miniproject_Synopsis.pdf`): title page, index, sections 1–8, and a
-student-details page, set in Times New Roman with 14 pt headings, 12 pt body,
-1.5 line spacing and justified text.
+Follows the department's own template (`Miniproject_Synopsis.pdf`): title page,
+index, sections 1–8, student-details page. **Email** and **Contact No.** are
+left blank to be filled in.
 
-It is **generated, never hand-edited**. Regenerate with:
+## Report
 
-```bash
-make synopsis
-```
+A conventional MCA report structure: title page, certificate, acknowledgement,
+abstract, contents, eight chapters and references.
 
-`scripts/build_synopsis_docx.py` holds the text and the layout;
-`scripts/synopsis_diagram.py` draws the flow diagram (`flow.png`) that section 5
-embeds. Editing the `.docx` directly means the next regeneration silently
-discards the change.
+**Check the certificate wording against your department's.** That page is the
+one part every institute words its own way; the text in the generator is
+deliberately plain so replacing it is a small edit.
 
-Two fields are deliberately left blank for you to fill in by hand or in the
-script: **Email** and **Contact No.** on the student-details page.
+## Diagrams
 
-## The full report
-
-The institute-template report document goes here (`.docx` and its exported
-`.pdf`), assembled from the eight documents in [`../`](..) in the order given
-in [`../README.md`](../README.md#report-assembly).
+`flow.png`, `architecture.png` and `er.png` are drawn by
+`scripts/synopsis_diagram.py` and `scripts/report_diagrams.py` and regenerate
+with either command above. The Mermaid originals stay in
+[`../diagrams/`](../diagrams) — they diff, and GitHub renders them; Word cannot.

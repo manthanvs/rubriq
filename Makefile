@@ -11,7 +11,7 @@
 PY ?= python
 PIP := $(PY) -m pip
 
-.PHONY: help install run test test-report lint fmt migrate revision seed-faculty seed reseed synopsis
+.PHONY: help install run test test-report lint fmt migrate revision seed-faculty seed reseed synopsis report
 
 help:
 	@echo "install   - install requirements.txt"
@@ -26,6 +26,7 @@ help:
 	@echo "seed      - build the demo dataset"
 	@echo "reseed    - wipe and rebuild the demo dataset"
 	@echo "synopsis  - build docs/report/RubriQ_Synopsis.docx"
+	@echo "report    - build docs/report/RubriQ_Report.docx"
 
 install:
 	$(PIP) install -r requirements.txt
@@ -67,3 +68,7 @@ reseed:
 # The .docx is generated, never hand-edited: docs/synopsis.md is the source.
 synopsis:
 	$(PY) scripts/build_synopsis_docx.py
+
+# Assembled from docs/; the .docx is generated, never hand-edited.
+report:
+	$(PY) -m scripts.build_report_docx

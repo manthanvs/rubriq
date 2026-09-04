@@ -7,7 +7,7 @@
 
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('help', 'install', 'run', 'test', 'test-report', 'lint', 'fmt', 'migrate', 'revision', 'seed-faculty', 'seed', 'reseed', 'synopsis')]
+    [ValidateSet('help', 'install', 'run', 'test', 'test-report', 'lint', 'fmt', 'migrate', 'revision', 'seed-faculty', 'seed', 'reseed', 'synopsis', 'report')]
     [string]$Target = 'help',
 
     [string]$M
@@ -40,6 +40,7 @@ switch ($Target) {
         'seed      - build the demo dataset'
         'reseed    - wipe and rebuild the demo dataset'
         'synopsis  - build docs/report/RubriQ_Synopsis.docx'
+        'report    - build docs/report/RubriQ_Report.docx'
         ''
         "interpreter: $py"
     }
@@ -68,4 +69,5 @@ switch ($Target) {
     'seed'     { Invoke-Py @('scripts/seed_demo.py') }
     'reseed'   { Invoke-Py @('scripts/seed_demo.py', '--reset') }
     'synopsis' { Invoke-Py @('scripts/build_synopsis_docx.py') }
+    'report'   { Invoke-Py @('-m', 'scripts.build_report_docx') }
 }
