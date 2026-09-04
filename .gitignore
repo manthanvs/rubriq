@@ -28,3 +28,6 @@ uploads/
 .idea/
 Thumbs.db
 desktop.ini
+
+# Word lock files, left behind while a .docx is open
+~$*
