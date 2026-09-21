@@ -520,6 +520,29 @@ the baseline stays visible on screen.
   ABSENT row stays ABSENT rather than becoming a number; and the Excel file
   carries the member's mark, not the group's
 
+### Phase 10 — Viva hardening ✅
+
+Not a feature phase. The demonstration script in `docs/deployment.md` §8 was
+walked end to end as both roles, and three defects came out of it — all of
+them the kind that only show up when you actually use the thing:
+
+- `make reseed` — step 1 of the script — failed on its **second** run, because
+  `MemberAdjustment` was deleted after the `ScoreSheet` it references. The
+  order is now `RESET_ORDER`, checked against the schema's own dependency
+  graph by `tests/test_seed_reset.py`. That test immediately found a second
+  gap: `late_policy` was never cleared at all.
+- The Reports page averaged the **group's** total for every member, so the
+  class mean disagreed with the exported spreadsheet. `GridRow.member_mark`
+  is what it averages now.
+- An empty metric label on the student Feedback page.
+
+Also `tests/test_docs_claims.py`: the documents make checkable claims — files
+they name, links they use, the test total, the page list, the penalty table —
+and those go stale silently. They are now tested.
+
+- **Exit:** the demo script runs start to finish with no manual repair, and a
+  stale claim in the documentation fails the suite rather than a viva
+
 ## 11. SDLC deliverables checklist
 
 The guidelines demand all SDLC components. These are tasks, not afterthoughts.
@@ -531,7 +554,7 @@ The guidelines demand all SDLC components. These are tasks, not afterthoughts.
 - [x] **Implementation** → `docs/implementation.md`
 - [x] **Testing** → `docs/test-cases.md` (manual table with actual results + a defect log) and `docs/test-report.txt` (`make test-report`)
 - [x] **Deployment** → `docs/deployment.md`
-- [ ] **Report** — institute template. `docs/report/` is the home; assemble from the eight documents above
+- [x] **Report** → `docs/report/RubriQ_Report.docx` (`make report`), assembled from the eight documents above. Verified structurally only — never rendered and read page by page, because Word's COM export hangs on it. Check the certificate wording against the department's before submitting.
 - [x] **Limitations & future scope** → `docs/limitations.md`
 
 **Declare out of scope in the synopsis** so it isn't ambushed in the viva: plagiarism detection, executing/compiling student code, mobile app, LMS integration, multi-institution tenancy, production cloud deployment, real-time collaborative editing.
@@ -568,7 +591,7 @@ The guidelines demand all SDLC components. These are tasks, not afterthoughts.
 | 4b | Criterion batching | one LLM call per criterion vs batched | start batched (cheaper, fewer rate-limit hits); split only if per-criterion accuracy is visibly worse |
 | 5 | Individual or group | solo vs modular split | ✅ **Groups, but only under faculty grant** — decided in Phase 8. Both directions are supported because both happen: a student can *request* a group naming their partners, and a guide can *form* one outright. Only `GroupStatus.GRANTED` confers anything — a pending request changes nothing, which is the gate the decision asks for. A granted group submits once: versions are numbered per group, every member resolves to the same row and the same `ScoreSheet`, and approving it settles the mark for all of them. **One row per student is kept in the grid** — collapsing a group into a single row is how a member ends up with no record of their own. This is the one deliberate exception to invariant #6, confined to `granted_group_ids_for()` and gated on `GRANTED`; `tests/core/groups/test_groups.py` asserts the negatives (a named classmate sees nothing before the grant, a rejected group grants nothing, an enrolled non-member stays blind). Module ownership for §11 is unchanged: the `core/` package boundaries are still the split. **Extended in Phase 9:** members of a granted group can now hold different marks, through a signed `MemberAdjustment` against the group's total with a mandatory reason. The group's own assessment is never touched — the work was marked once, and what differs is contribution. |
 | 6 | Submission types | PDF/DOCX only, or also GitHub URL | ✅ **Both** — decided in Phase 8. A submission may carry files, repository links, or both. A link is accepted **only when its owner matches a GitHub account faculty recorded** for the submitter (or, on a granted group's submission, for a group-mate) — the profiles students already shared with their guide. The register is faculty-writable only: a check whose reference value is supplied by the party being checked is not a check. Parsing is generous about shape (browser URL, `.git` clone URL, SSH form, deep link with a ref) and strict about owner, and the host check rejects lookalikes including `github.com@evil.example`. **Nothing fetches the repository.** The link is an artifact — recorded, shown, exported — not a source of evidence: fetching would add a network dependency at upload time and invite the model to judge code it never saw, which §6.5's guard could not verify a span against. A link-only submission is therefore valid and extracts no text, so its criteria fall to `NO_EVIDENCE` honestly. Proof: `tests/core/submissions/test_links.py` and `test_link_submission.py`. |
-| 7 | Guide approval | title + synopsis sign-off from Dr. Arakerimath | **do before Phase 1** |
+| 7 | Guide approval | title + synopsis sign-off from Dr. Arakerimath | ⚠️ **Still open, and now overdue.** It said "do before Phase 1"; the build is at Phase 10. Nothing in the code depends on it, but nothing in the code can substitute for it either — `docs/report/RubriQ_Synopsis.docx` is the artifact to take to the sign-off. |
 | 8 | Database engine | PostgreSQL 16 vs SQLite | ✅ **SQLite** — decided during Phase 2, superseding §3's original choice. Postgres bought real concurrency and JSONB, neither of which this project needs: a single-guide review panel has no write contention worth a server, and every JSON column is read by primary key rather than searched by content. Against that, it cost an install, a service, and credentials on every machine the project has to run on — including whichever one the viva happens on. SQLite makes the database a file that can be copied, inspected, and shipped with the report. The engine is tuned rather than left on defaults (WAL, `busy_timeout`, `foreign_keys=ON`); see `core/db/engine.py`. **Limits, stated honestly:** one writer at a time, so this would not survive a real cohort submitting simultaneously — that belongs in §11's limitations, not hidden. Reversing it is a URL change plus reinstating `psycopg`, because nothing outside `core/db/` knows the dialect. |
 
 ---

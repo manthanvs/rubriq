@@ -6,6 +6,9 @@
 
 # --- Phase 0: foundation ---
 streamlit>=1.42            # view layer; 1.42 is the floor for native st.login() OIDC
+Authlib>=1.3.2             # st.login() needs it and does not pull it in. Without
+                           # this the sign-in button raises at runtime, which is a
+                           # bad way to discover a missing dependency
 SQLAlchemy>=2.0            # engine and ORM; imported only inside core/db
                            # SQLite driver is sqlite3, in the standard library
 alembic>=1.13              # migration history is an SDLC deliverable, not optional
