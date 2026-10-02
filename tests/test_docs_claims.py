@@ -59,7 +59,16 @@ def _resolves(doc: Path, path: str) -> bool:
 
 
 def markdown_files() -> list[Path]:
-    return sorted(DOCS.rglob("*.md")) + [REPO_ROOT / "CLAUDE.md"]
+    """Every document that makes claims about this repository.
+
+    README.md is in the list because it is the first thing anyone reads on
+    GitHub, which makes a stale number there more visible than a stale one
+    anywhere else.
+    """
+    return sorted(DOCS.rglob("*.md")) + [
+        REPO_ROOT / "CLAUDE.md",
+        REPO_ROOT / "README.md",
+    ]
 
 
 def test_there_are_documents_to_check() -> None:
