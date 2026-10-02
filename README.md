@@ -18,7 +18,7 @@ authority, the intelligence is assistive.
 | Course | MCA Semester III — Mini Project, MCA33EL03 |
 | Guide | Prof. Dr. Anjana Arakerimath (HOD) |
 | Institute | Pimpri Chinchwad College of Engineering, Pune |
-| Tests | 626, all passing |
+| Tests | 628, all passing |
 
 ---
 

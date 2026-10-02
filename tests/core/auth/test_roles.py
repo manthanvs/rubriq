@@ -19,7 +19,7 @@ def test_an_allow_listed_address_is_faculty() -> None:
 
 def test_matching_ignores_case() -> None:
     """The allow-list is hand-written; Google does not promise a case."""
-    assert resolve_role("Anjana.Arakerimath@PCCOEPune.org", FACULTY) is Role.FACULTY
+    assert resolve_role("Guide@PCCOEPune.org", FACULTY) is Role.FACULTY
 
 
 def test_matching_ignores_surrounding_whitespace_in_the_list() -> None:

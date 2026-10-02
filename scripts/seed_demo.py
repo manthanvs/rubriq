@@ -31,6 +31,7 @@ every total came from ``core/scoring/engine.py``.
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 import tomllib
@@ -100,11 +101,11 @@ from core.submissions.service import submit  # noqa: E402
 
 SECRETS = REPO_ROOT / ".streamlit" / "secrets.toml"
 
-#: Who owns the seeded subject. Change these two lines to hand the demo to a
-#: different faculty member — the address must also be on the allow-list in
-#: .streamlit/secrets.toml, or they will sign in as a student.
-FACULTY = "guide@pccoepune.org"
-FACULTY_NAME = "Prof. Shreya Deshmukh"
+#: Used only when no allow-list exists yet — ``ensure_secrets`` writes it into
+#: a fresh secrets.toml for someone cloning this for the first time. Once that
+#: file exists, the real address is read from it instead, so no real person's
+#: address is ever committed to this repository.
+DEFAULT_FACULTY = "guide@pccoepune.org"
 
 #: (name, prn, days late relative to the deadline, or None for "never submitted")
 COHORT: tuple[tuple[str, str, int | None], ...] = (
@@ -176,16 +177,65 @@ def _actor(email: str, role: Role, name: str) -> Actor:
     return Actor(email=email, role=role, name=name)
 
 
-#: Cohort members who are a real Google account rather than a made-up one, so
-#: whoever runs the demo can sign in as themselves and see their own row. The
-#: derived address is used for everybody else.
-REAL_ACCOUNTS = {
-    "Manthan Sankpal": "a.student25@pccoepune.org",
-}
+#: Cohort members who should resolve to a real Google account rather than a
+#: made-up one, so whoever runs the demo can sign in as themselves and find
+#: their own row. Populated from ``[demo] accounts`` in the gitignored
+#: secrets.toml — see ``_load_overrides`` — so it is empty in the repository.
+REAL_ACCOUNTS: dict[str, str] = {}
 
 
 def _handle(name: str) -> str:
     return REAL_ACCOUNTS.get(name) or name.lower().replace(" ", ".") + "@pccoepune.org"
+
+
+def _display_name(email: str) -> str:
+    """A readable name from an address, so none has to be configured.
+
+    ``asha.kulkarni25@pccoepune.org`` becomes ``Asha Kulkarni``. Digits are
+    dropped because an address often carries a joining year that is not part of
+    anybody's name.
+    """
+    local = email.split("@")[0]
+    parts = [re.sub(r"\d+", "", p) for p in local.replace("_", ".").split(".")]
+    return " ".join(p.capitalize() for p in parts if p) or "Project Guide"
+
+
+def _load_overrides() -> tuple[str, str]:
+    """The faculty address, and any real student accounts, from secrets.toml.
+
+    Keeping these in the gitignored secrets file rather than in this script is
+    what lets the repository be public without publishing anybody's address.
+
+        [demo]
+        faculty = "someone@pccoepune.org"
+        accounts = { "Manthan Sankpal" = "a.student25@pccoepune.org" }
+
+    ``[demo] faculty`` wins over the allow-list. Falling back to its first
+    entry would otherwise make the demo's owner depend on the order of a list
+    that is maintained for a different reason entirely.
+    """
+    if not SECRETS.exists():
+        return DEFAULT_FACULTY, _display_name(DEFAULT_FACULTY)
+
+    with SECRETS.open("rb") as handle:
+        raw = tomllib.load(handle)
+
+    REAL_ACCOUNTS.update(raw.get("demo", {}).get("accounts", {}))
+
+    demo = raw.get("demo", {})
+    allowed = raw.get("rubriq", {}).get("faculty_allowlist") or [DEFAULT_FACULTY]
+    email = demo.get("faculty") or allowed[0]
+
+    if email not in allowed:
+        print(
+            f"warning: [demo] faculty {email} is not on the allow-list, so they "
+            "will sign in as a student. Add them to [rubriq] faculty_allowlist.",
+            file=sys.stderr,
+        )
+    return email, demo.get("faculty_name") or _display_name(email)
+
+
+FACULTY, FACULTY_NAME = _load_overrides()
 
 
 def load_settings() -> Settings:

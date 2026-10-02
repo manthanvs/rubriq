@@ -636,4 +636,4 @@ tests/test_smoke.py::test_engine_connects PASSED                         [ 99%]
 tests/test_smoke.py::test_check_connection_reports_failure_instead_of_raising PASSED [ 99%]
 tests/test_smoke.py::test_session_scope_rolls_back_on_error PASSED       [100%]
 
-============================ 628 passed in 37.65s =============================
+============================ 628 passed in 38.58s =============================
