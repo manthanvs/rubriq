@@ -9,7 +9,7 @@ with someone else's student in it.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -18,6 +18,7 @@ from core.academics.milestones import create_milestone
 from core.academics.subjects import create_cycle, create_subject
 from core.auth.actor import Actor
 from core.auth.roles import Role
+from core.clock import utc_now
 from core.config import Settings
 from core.db.engine import session_scope
 from core.db.models import Enrollment, User
@@ -82,7 +83,11 @@ def world(db_factory) -> World:
             cycle_id=cycle_a.id,
             index=1,
             title="Review 1",
-            due_at=datetime(2026, 10, 1, 18, 30, tzinfo=UTC),
+            # Relative, not a fixed date. A hardcoded due date silently
+            # becomes a *late* submission once the calendar passes it, and
+            # the whole suite starts failing on an arithmetic bug that is
+            # not there. This one did, on 2026-10-02.
+            due_at=utc_now() + timedelta(days=30),
             max_marks=25,
             is_visible=True,
         )
@@ -92,7 +97,7 @@ def world(db_factory) -> World:
             cycle_id=cycle_a.id,
             index=2,
             title="Review 2 (draft)",
-            due_at=datetime(2026, 11, 1, 18, 30, tzinfo=UTC),
+            due_at=utc_now() + timedelta(days=60),
             max_marks=25,
             is_visible=False,
         )
