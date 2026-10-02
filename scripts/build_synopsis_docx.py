@@ -33,7 +33,7 @@ from docx.enum.section import WD_SECTION  # noqa: E402
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK  # noqa: E402
 from docx.oxml import OxmlElement  # noqa: E402
 from docx.oxml.ns import qn  # noqa: E402
-from docx.shared import Inches, Pt  # noqa: E402
+from docx.shared import Inches, Pt, RGBColor  # noqa: E402
 
 from scripts.synopsis_diagram import build as build_diagram  # noqa: E402
 
@@ -560,6 +560,23 @@ def set_styles(document) -> None:
         style.paragraph_format.line_spacing = LINE_SPACING
         style.paragraph_format.space_after = Pt(4)
 
+    # Real heading styles, restyled to look exactly like the manually
+    # formatted headings they replace -- Word's own defaults are blue Calibri,
+    # so every property has to be overridden. The reason to use the styles at
+    # all is that a TOC field and the navigation pane both read them: a
+    # document whose headings are bold Normal paragraphs cannot have a
+    # contents page that knows its own page numbers.
+    for style_name in ("Heading 1", "Heading 2"):
+        style = document.styles[style_name]
+        style.font.name = FONT
+        style.font.size = Pt(HEAD_PT)
+        style.font.bold = True
+        style.font.color.rgb = RGBColor(0, 0, 0)
+        style.element.rPr.rFonts.set(qn("w:eastAsia"), FONT)
+        style.paragraph_format.line_spacing = LINE_SPACING
+        style.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        style.paragraph_format.keep_with_next = True
+
 
 def page_number_footer(section) -> None:
     """A real PAGE field — python-docx has no API for it.
@@ -588,6 +605,57 @@ def page_number_footer(section) -> None:
         run._r.append(element)
 
 
+def table_of_contents(document, entries) -> None:
+    """A real TOC field, carrying the chapter list as its cached result.
+
+    Two things have to be true at once. Word must be able to fill in page
+    numbers, which needs a field plus heading styles for it to collect. And
+    anything that is not Word -- a converter, a phone, a preview pane -- must
+    still show something, because a field it cannot evaluate renders as an
+    empty box.
+
+    Writing the chapter list between ``separate`` and ``end`` satisfies both:
+    it is the field's cached result, so Word overwrites it on the first update
+    and everything else simply displays it.
+    """
+    opening = document.add_paragraph().add_run()
+    for tag, attrs, text in (
+        ("w:fldChar", {"w:fldCharType": "begin"}, None),
+        ("w:instrText", {"xml:space": "preserve"}, r' TOC \o "1-2" \h \z \u '),
+        ("w:fldChar", {"w:fldCharType": "separate"}, None),
+    ):
+        element = OxmlElement(tag)
+        for key, value in attrs.items():
+            element.set(qn(key), value)
+        if text is not None:
+            element.text = text
+        opening._r.append(element)
+
+    for entry in entries:
+        line = document.add_paragraph()
+        line.paragraph_format.line_spacing = LINE_SPACING
+        line.paragraph_format.space_after = Pt(2)
+        line.paragraph_format.left_indent = Inches(0.5)
+        run = line.add_run(entry)
+        run.font.name = FONT
+        run.font.size = Pt(BODY_PT)
+
+    closing = document.add_paragraph().add_run()
+    element = OxmlElement("w:fldChar")
+    element.set(qn("w:fldCharType"), "end")
+    closing._r.append(element)
+
+
+def update_fields_on_open(document) -> None:
+    """Ask Word to refresh fields when the document is opened.
+
+    Without this the contents page shows its cached text until somebody thinks
+    to press F9, which nobody does.
+    """
+    element = OxmlElement("w:updateFields")
+    element.set(qn("w:val"), "true")
+    document.settings.element.append(element)
+
 def centred(document, text, *, size, bold=False, space_before=0, space_after=6):
     paragraph = document.add_paragraph()
     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -602,7 +670,7 @@ def centred(document, text, *, size, bold=False, space_before=0, space_after=6):
 
 
 def heading(document, text, *, level=1):
-    paragraph = document.add_paragraph()
+    paragraph = document.add_paragraph(style=f"Heading {level}")
     paragraph.paragraph_format.space_before = Pt(14 if level == 1 else 10)
     paragraph.paragraph_format.space_after = Pt(6)
     paragraph.paragraph_format.line_spacing = LINE_SPACING

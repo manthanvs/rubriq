@@ -31,3 +31,6 @@ desktop.ini
 
 # Word lock files, left behind while a .docx is open
 ~$*
+
+# Editor/launch config for the Claude Code browser preview.
+.claude/

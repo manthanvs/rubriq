@@ -550,11 +550,15 @@ The guidelines demand all SDLC components. These are tasks, not afterthoughts.
 - [x] **Synopsis** → `docs/synopsis.md`
 - [x] **Requirement analysis** → `docs/requirements.md` (74 FR, 13 NFR, each traced to a module and a test)
 - [x] **SRS** → `docs/srs.md`
-- [x] **Design** → `docs/design.md` + `docs/diagrams/` (ER, DFD L0/L1, use case, architecture, evaluation state machine — all Mermaid, so they diff)
+- [x] **Design** → `docs/design.md` + `docs/diagrams/` (ER, DFD L0/L1, use case, architecture, evaluation state machine — all Mermaid, so they diff). Word renders none of them, so `scripts/report_diagrams.py` redraws all six with Pillow for the report. They are deliberately simplified rather than transcribed — a twenty-table ER diagram at A4 is unreadable — and the Mermaid stays the full version.
 - [x] **Implementation** → `docs/implementation.md`
 - [x] **Testing** → `docs/test-cases.md` (manual table with actual results + a defect log) and `docs/test-report.txt` (`make test-report`)
 - [x] **Deployment** → `docs/deployment.md`
-- [x] **Report** → `docs/report/RubriQ_Report.docx` (`make report`), assembled from the eight documents above. Verified structurally only — never rendered and read page by page, because Word's COM export hangs on it. Check the certificate wording against the department's before submitting.
+- [x] **Report** → `docs/report/RubriQ_Report.docx` (`make report`), assembled from the eight documents above. Eight chapters, nine tables, seven figures.
+
+  Reading the built file rather than only building it found three things a structural check cannot see. **Chapter 4 carried three figures and the design set names six** — the DFDs, the use-case diagram and the state machine existed only as Mermaid and had never been drawn into the document, which is the one gap in a System Design chapter an examiner reliably looks for. **Every heading was a bold `Normal` paragraph**, so Word's navigation pane was empty and no contents page could know its own page numbers. **The contents page was therefore a hand-maintained list** with no page numbers at all. All three are closed: real `Heading 1`/`Heading 2` styles restyled to look identical, a `TOC` field carrying the chapter list as its cached result so non-Word viewers still show something, and `w:updateFields` so Word fills the page numbers on open.
+
+  Still true, and worth keeping stated: this has been read as text and inspected as structure, **not rendered and read page by page**, because Word's COM export hangs on it. Page breaks and figure placement are unverified. Check the certificate wording against the department's before submitting.
 - [x] **Limitations & future scope** → `docs/limitations.md`
 
 **Declare out of scope in the synopsis** so it isn't ambushed in the viva: plagiarism detection, executing/compiling student code, mobile app, LMS integration, multi-institution tenancy, production cloud deployment, real-time collaborative editing.

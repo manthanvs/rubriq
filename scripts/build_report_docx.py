@@ -38,7 +38,6 @@ from scripts.build_synopsis_docx import (  # noqa: E402
     FONT,
     GUIDE,
     INSTITUTE,
-    LINE_SPACING,
     PRN,
     STUDENT_NAME,
     YEAR,
@@ -50,9 +49,18 @@ from scripts.build_synopsis_docx import (  # noqa: E402
     page_number_footer,
     para,
     set_styles,
+    table_of_contents,
     two_column_table,
+    update_fields_on_open,
 )
-from scripts.report_diagrams import build_architecture, build_er  # noqa: E402
+from scripts.report_diagrams import (  # noqa: E402
+    build_architecture,
+    build_dfd_l0,
+    build_dfd_l1,
+    build_er,
+    build_eval_state,
+    build_use_case,
+)
 from scripts.synopsis_diagram import build as build_flow  # noqa: E402
 
 DEFAULT_OUT = REPO_ROOT / "docs" / "report" / "RubriQ_Report.docx"
@@ -350,6 +358,45 @@ HARDWARE = (
 )
 
 # -- 4. Design ------------------------------------------------------------
+DESIGN_USE_CASES = [
+    "Two people use the system and they use it for different things. A student "
+    "reads a rubric, submits work against it, asks a question about it, and "
+    "later reads the feedback. A faculty member creates the subject, enrols the "
+    "class, writes and publishes the rubric, runs the evaluation, corrects it, "
+    "approves it, and exports the result. Signing in is the only thing both do.",
+    "The seven shaded cases on the right of the diagram are not features. They "
+    "are steps that other use cases always include and can never skip: "
+    "asserting the institute domain before a role is resolved, checking that "
+    "rubric weights sum to 100 before a version can be published, removing the "
+    "student's identity before any text reaches the model, checking a quoted "
+    "span against the submission before a score is stored, applying the "
+    "lateness rules before a total is written, and recording an audit row for "
+    "every change. Drawing them separately is deliberate: each one is an "
+    "invariant, and an invariant that is merely described in prose is one that "
+    "a later change can quietly remove.",
+]
+
+DESIGN_DATA_FLOW = [
+    "At the context level the system is a single process with four things "
+    "outside it: the student, the faculty member, Google's sign-in service, and "
+    "the language model. Two properties of that boundary are worth stating "
+    "because they are design decisions rather than consequences. Nothing "
+    "identifying crosses it on the way to the model — the arrow carries rubric "
+    "text and submission text with the name, PRN and email already removed. And "
+    "everything that comes back is an estimate; it becomes a mark only after a "
+    "named person approves it inside the boundary.",
+    "Opening that process up gives seven sub-processes and six data stores. "
+    "The evaluation process, 5.0, is the one to read closely. It reads the "
+    "rubric store and the submission store and writes to neither, and it has no "
+    "path at all to the user store or the subject store. That is what the "
+    "constraint “the graph has no tools” means in practice: the evaluation "
+    "receives a rubric and a block of text as input and returns structured "
+    "output, and there is no route by which it could query the database for "
+    "anything else. Process 6.0 is likewise the only writer of a total — the "
+    "others produce verdicts and answers, and the arithmetic happens in one "
+    "place.",
+]
+
 
 DESIGN_PRINCIPLE = [
     "The system is built on one architectural rule: all domain logic lives in "
@@ -863,16 +910,24 @@ def figure(document, path: Path, caption: str, width: float = 5.9) -> None:
 
 
 def build(out_path: Path) -> Path:
-    flow = REPORT_DIR / "flow.png"
-    architecture = REPORT_DIR / "architecture.png"
-    er = REPORT_DIR / "er.png"
-    for path, builder in (
-        (flow, build_flow),
-        (architecture, build_architecture),
-        (er, build_er),
-    ):
+    diagrams = {
+        "flow": build_flow,
+        "architecture": build_architecture,
+        "er": build_er,
+        "use-case": build_use_case,
+        "dfd-l0": build_dfd_l0,
+        "dfd-l1": build_dfd_l1,
+        "eval-state": build_eval_state,
+    }
+    figures = {}
+    for name, builder in diagrams.items():
+        path = REPORT_DIR / f"{name}.png"
         if not path.exists():
             builder(path)
+        figures[name] = path
+    flow = figures["flow"]
+    architecture = figures["architecture"]
+    er = figures["er"]
 
     document = Document()
     set_styles(document)
@@ -941,14 +996,7 @@ def build(out_path: Path) -> Path:
 
     # ---- contents ------------------------------------------------------
     centred(document, "CONTENTS", size=16, bold=True, space_after=18)
-    for entry in CHAPTERS:
-        line = document.add_paragraph()
-        line.paragraph_format.line_spacing = LINE_SPACING
-        line.paragraph_format.space_after = Pt(2)
-        line.paragraph_format.left_indent = Inches(0.5)
-        run = line.add_run(entry)
-        run.font.name = FONT
-        run.font.size = Pt(BODY_PT)
+    table_of_contents(document, CHAPTERS)
     page_break(document)
 
     # ---- 1. Introduction -----------------------------------------------
@@ -1021,7 +1069,27 @@ def build(out_path: Path) -> Path:
         para(document, text)
     figure(document, architecture, "Fig. 4.1 — System architecture")
 
-    heading(document, "4.2 Data model", level=2)
+    heading(document, "4.2 Use cases", level=2)
+    for text in DESIGN_USE_CASES:
+        para(document, text)
+    figure(document, figures["use-case"], "Fig. 4.2 — Use-case diagram", width=5.1)
+
+    heading(document, "4.3 Data flow", level=2)
+    for text in DESIGN_DATA_FLOW:
+        para(document, text)
+    figure(
+        document,
+        figures["dfd-l0"],
+        "Fig. 4.3 — Data flow diagram, level 0 (context)",
+    )
+    figure(
+        document,
+        figures["dfd-l1"],
+        "Fig. 4.4 — Data flow diagram, level 1",
+        width=5.2,
+    )
+
+    heading(document, "4.4 Data model", level=2)
     para(
         document,
         "The database holds twenty tables. Three properties of the model carry "
@@ -1034,12 +1102,12 @@ def build(out_path: Path) -> Path:
         "page is drawn, which is what makes “what has the student followed, "
         "and what have they not” answerable.",
     )
-    figure(document, er, "Fig. 4.2 — Entity–relationship overview", width=5.9)
+    figure(document, er, "Fig. 4.5 — Entity–relationship overview", width=5.9)
 
-    heading(document, "4.3 Flow of work", level=2)
-    figure(document, flow, "Fig. 4.3 — Flow of work in RubriQ", width=5.4)
+    heading(document, "4.5 Flow of work", level=2)
+    figure(document, flow, "Fig. 4.6 — Flow of work in RubriQ", width=5.4)
 
-    heading(document, "4.4 Scoring", level=2)
+    heading(document, "4.6 Scoring", level=2)
     for text in DESIGN_SCORING:
         para(document, text)
     para(document, "The late-submission policy is as follows:")
@@ -1047,11 +1115,17 @@ def build(out_path: Path) -> Path:
         document, LATE_TABLE, headers=("Days late", "Outcome"), widths=(1.3, 4.6)
     )
 
-    heading(document, "4.5 The AI layer", level=2)
+    heading(document, "4.7 The AI layer", level=2)
     for text in DESIGN_AI:
         para(document, text)
+    figure(
+        document,
+        figures["eval-state"],
+        "Fig. 4.7 — Evaluation state machine, with both failure loops",
+        width=5.6,
+    )
 
-    heading(document, "4.6 The evidence guard", level=2)
+    heading(document, "4.8 The evidence guard", level=2)
     for text in DESIGN_GUARD:
         para(document, text)
 
@@ -1144,6 +1218,7 @@ def build(out_path: Path) -> Path:
         numbered(document, text)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    update_fields_on_open(document)
     document.save(out_path)
     return out_path
 
