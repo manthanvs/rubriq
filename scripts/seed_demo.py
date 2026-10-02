@@ -100,8 +100,11 @@ from core.submissions.service import submit  # noqa: E402
 
 SECRETS = REPO_ROOT / ".streamlit" / "secrets.toml"
 
+#: Who owns the seeded subject. Change these two lines to hand the demo to a
+#: different faculty member — the address must also be on the allow-list in
+#: .streamlit/secrets.toml, or they will sign in as a student.
 FACULTY = "guide@pccoepune.org"
-FACULTY_NAME = "Dr. Anjana Arakerimath"
+FACULTY_NAME = "Prof. Shreya Deshmukh"
 
 #: (name, prn, days late relative to the deadline, or None for "never submitted")
 COHORT: tuple[tuple[str, str, int | None], ...] = (
@@ -173,8 +176,16 @@ def _actor(email: str, role: Role, name: str) -> Actor:
     return Actor(email=email, role=role, name=name)
 
 
+#: Cohort members who are a real Google account rather than a made-up one, so
+#: whoever runs the demo can sign in as themselves and see their own row. The
+#: derived address is used for everybody else.
+REAL_ACCOUNTS = {
+    "Manthan Sankpal": "a.student25@pccoepune.org",
+}
+
+
 def _handle(name: str) -> str:
-    return name.lower().replace(" ", ".") + "@pccoepune.org"
+    return REAL_ACCOUNTS.get(name) or name.lower().replace(" ", ".") + "@pccoepune.org"
 
 
 def load_settings() -> Settings:
