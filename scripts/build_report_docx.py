@@ -62,6 +62,11 @@ TITLE = "RubriQ – AI-Assisted Project Review & Rubric Evaluation System for PC
 
 TESTS_TOTAL = 628
 
+#: Shown on the title page and in §1.3. Private at the time of writing; make
+#: the repository public before handing the report in, or the link is dead
+#: for whoever reads it.
+REPO_URL = "https://github.com/manthanvs/rubriq"
+
 CERTIFICATE = (
     f"This is to certify that the Mini Project entitled “{TITLE}” has been "
     f"carried out by {STUDENT_NAME} (PRN {PRN}) in partial fulfilment of the "
@@ -825,6 +830,7 @@ FUTURE = [
 ]
 
 REFERENCES = [
+    f"RubriQ source code and commit history. {REPO_URL}",
     "Streamlit documentation. https://docs.streamlit.io",
     "SQLAlchemy 2.0 documentation. https://docs.sqlalchemy.org",
     "Alembic documentation. https://alembic.sqlalchemy.org",
@@ -888,7 +894,8 @@ def build(out_path: Path) -> Path:
     centred(document, GUIDE, size=15, space_after=40)
     centred(document, "DEPARTMENT OF MCA", size=15, bold=True, space_after=8)
     centred(document, INSTITUTE, size=12, bold=True, space_after=16)
-    centred(document, YEAR, size=13, space_after=0)
+    centred(document, YEAR, size=13, space_after=16)
+    centred(document, f"Source code: {REPO_URL}", size=11, space_after=0)
     page_break(document)
 
     document.add_section(WD_SECTION.CONTINUOUS)
@@ -956,6 +963,14 @@ def build(out_path: Path) -> Path:
 
     heading(document, "1.3 Organisation of the report", level=2)
     para(document, INTRO_ORGANISATION)
+    para(
+        document,
+        "The complete source code, its commit history, and the eight "
+        "supporting documents this report is assembled from are available "
+        f"at {REPO_URL}. The commit history is itself part of the record: "
+        "each phase of the build is a separate commit, and the defects "
+        "listed in Chapter 6 can be traced to the commits that fixed them.",
+    )
 
     # ---- 2. Problem statement ------------------------------------------
     heading(document, "2. Problem Statement and Existing System")
