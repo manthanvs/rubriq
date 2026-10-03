@@ -45,7 +45,7 @@ switch ($Target) {
         "interpreter: $py"
     }
     'install'  { Invoke-Py @('-m', 'pip', 'install', '-r', 'requirements.txt') }
-    'run'      { Invoke-Py @('-m', 'streamlit', 'run', 'app/main.py') }
+    'run'      { Invoke-Py @('-m', 'streamlit', 'run', 'streamlit_app.py') }
     'test'     { Invoke-Py @('-m', 'pytest') }
     'test-report' {
         # The verbose run is checked in, because "the tests pass" is a claim

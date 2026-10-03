@@ -244,4 +244,6 @@ def main() -> None:
     build_navigation(actor).run()
 
 
-main()
+# Deliberately not called here: streamlit_app.py at the repository root is
+# the entry point, and it calls main(). See that file for why the entry
+# point cannot live in this directory.

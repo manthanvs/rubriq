@@ -8,15 +8,24 @@ student's faculty pages are never built and there is nothing to reach (§8).
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import streamlit as st
 
 from core.auth.actor import Actor
 from core.auth.pages import PageSpec, pages_for
 
+#: Spec paths are written relative to this package. Resolving them here, to an
+#: absolute path, is what keeps them working wherever the entry script lives:
+#: ``st.Page`` resolves a relative path against the *entry script's* directory,
+#: so when the entry point moved to the repository root every page became
+#: unfindable. A spec should not have to know where the app is launched from.
+APP_DIR = Path(__file__).resolve().parent
+
 
 def _to_page(spec: PageSpec) -> st.Page:
     return st.Page(
-        spec.path,
+        APP_DIR / spec.path,
         title=spec.title,
         icon=spec.icon,
         url_path=spec.key,

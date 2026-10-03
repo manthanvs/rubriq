@@ -32,7 +32,7 @@ install:
 	$(PIP) install -r requirements.txt
 
 run:
-	$(PY) -m streamlit run app/main.py
+	$(PY) -m streamlit run streamlit_app.py
 
 test:
 	$(PY) -m pytest

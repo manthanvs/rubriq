@@ -22,8 +22,9 @@ STUDENT_ONLY = frozenset({Role.STUDENT})
 class PageSpec:
     """One navigable page.
 
-    ``path`` is relative to ``app/``, because that is where the Streamlit
-    entrypoint lives and what ``st.Page`` resolves against.
+    ``path`` is relative to the ``app`` package, and is resolved to an
+    absolute path by ``app/navigation.py`` — not by Streamlit, which would
+    resolve it against whichever script was launched.
     """
 
     key: str

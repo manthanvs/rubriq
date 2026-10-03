@@ -221,7 +221,7 @@ reports that it is unavailable and everything deterministic still works, which
 is invariant #10 demonstrated rather than described.
 
 One thing had to be built for this to work at all. The host runs
-`streamlit run app/main.py` and nothing else: there is no shell, so `make seed`
+`streamlit run streamlit_app.py` and nothing else: there is no shell, so `make seed`
 never happens and the app would start against a database that does not exist.
 `app/bootstrap.py` closes that — it migrates on first boot and seeds the demo
 cohort if no user exists yet.
@@ -237,7 +237,7 @@ negatives.
 
 1. Push to GitHub — Community Cloud deploys from a repository, not an upload.
 2. At <https://share.streamlit.io>, sign in with GitHub and create an app from
-   `manthanvs/rubriq`, branch `main`, main file path `app/main.py`.
+   `manthanvs/rubriq`, branch `main`, main file path `streamlit_app.py`.
 3. Paste the contents of `.streamlit/secrets.toml` into **Advanced settings →
    Secrets**, with these changes:
    - add `[deploy]` with `bootstrap = true`

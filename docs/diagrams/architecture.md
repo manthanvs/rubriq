@@ -95,7 +95,7 @@ flowchart TB
 
 | Rule | Consequence |
 |---|---|
-| `core/` may not import Streamlit | The domain is unit-testable without a browser or a session, which is why 593 of the 632 tests need no Streamlit runtime |
+| `core/` may not import Streamlit | The domain is unit-testable without a browser or a session, which is why 606 of the 645 tests need no Streamlit runtime |
 | `app/` may not do mark arithmetic | There is one place a total can be computed, so the grid, the exporters, and the reports page cannot disagree |
 | Only `core/ai/` may import LangGraph or an LLM SDK | Callers see three plain functions; the graph is an implementation detail that can be replaced without touching a page |
 | Only `core/db/` knows the dialect | Changing database engine is a URL change |
