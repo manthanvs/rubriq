@@ -16,7 +16,7 @@ worth less than an assertion.
 make test
 ```
 
-**653 tests, all passing.** The full verbose run is checked in at
+**657 tests, all passing.** The full verbose run is checked in at
 [`test-report.txt`](test-report.txt); regenerate it with:
 
 ```bash
