@@ -129,8 +129,14 @@ def build_provider(settings: Settings) -> LLMProvider:
         return _GeminiProvider(settings.llm_api_key or "", settings.llm_model or "")
     if provider == "groq":
         return _GroqProvider(settings.llm_api_key or "", settings.llm_model or "")
+    if provider == "openrouter":
+        return _OpenRouterProvider(
+            settings.llm_api_key or "", settings.llm_model or ""
+        )
 
-    raise AIUnavailable(f"Unknown AI provider {provider!r}. Supported: gemini, groq.")
+    raise AIUnavailable(
+        f"Unknown AI provider {provider!r}. Supported: gemini, groq, openrouter."
+    )
 
 
 class _GeminiProvider:
@@ -204,6 +210,66 @@ class _GroqProvider:
         except Exception as exc:
             raise AIUnavailable(f"Groq could not be reached: {exc}") from exc
 
+
+
+class _OpenRouterProvider:
+    """OpenRouter — a gateway, not a model, which is the point.
+
+    One key reaches many vendors, including models served at no cost. The API
+    is OpenAI-shaped, so this is the Groq implementation with a different base
+    URL and two extra headers that OpenRouter asks senders to set.
+
+    **Pick a model that supports ``response_format``.** §6.5 requires JSON and
+    nothing else, and the contract is far stronger when the API enforces it
+    than when only the prompt asks for it. Not every free model does: at the
+    time of writing ``nemotron-3-super-120b-a12b:free`` advertises
+    ``response_format`` and the larger ``nemotron-3-ultra-550b-a55b:free``
+    does not. The parameter is sent anyway — OpenRouter ignores what a model
+    cannot honour — so a model without it still works, falling back on the
+    prompt and the repair loop. It is simply less reliable, and a parse
+    failure there costs a criterion rather than erroring loudly.
+
+    Check before choosing one::
+
+        curl -s https://openrouter.ai/api/v1/models | jq '.data[]
+          | select(.id|test("free")) | {id, supported_parameters}'
+    """
+
+    name = "openrouter"
+    DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
+    BASE_URL = "https://openrouter.ai/api/v1"
+
+    def __init__(self, api_key: str, model: str = "") -> None:
+        self._api_key = api_key
+        self.model = model or self.DEFAULT_MODEL
+
+    def complete(self, *, system: str, user: str) -> str:
+        try:
+            from openai import OpenAI
+        except ImportError as exc:
+            raise AIUnavailable(
+                "The OpenRouter provider needs the openai package installed."
+            ) from exc
+
+        try:
+            client = OpenAI(api_key=self._api_key, base_url=self.BASE_URL)
+            completion = client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                response_format={"type": "json_object"},
+                extra_headers={
+                    # OpenRouter attributes traffic with these. Neither is a
+                    # secret and neither has to resolve.
+                    "HTTP-Referer": "https://github.com/manthanvs/rubriq",
+                    "X-Title": "RubriQ",
+                },
+            )
+            return completion.choices[0].message.content or ""
+        except Exception as exc:
+            raise AIUnavailable(f"OpenRouter could not be reached: {exc}") from exc
 
 # -- the public function -------------------------------------------------
 

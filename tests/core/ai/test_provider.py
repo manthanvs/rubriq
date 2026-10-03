@@ -368,3 +368,79 @@ class TestPromptShape:
         assert "VERBATIM" in provider.system
         assert "NO_EVIDENCE" in provider.system
         assert "checked against the submission" in provider.system
+
+
+class TestOpenRouterProvider:
+    """OpenRouter is a gateway, so what matters is what we send it.
+
+    No live call: the point is the request shape, which is what decides
+    whether §6.5's JSON contract is enforced by the API or only requested by
+    the prompt.
+    """
+
+    @staticmethod
+    def _settings(model: str = "") -> Settings:
+        return Settings(
+            database_url="sqlite://",
+            llm_provider="openrouter",
+            llm_api_key="test-key",
+            llm_model=model,
+        )
+
+    def _fake_openai(self, monkeypatch, *, raises: Exception | None = None):
+        """Intercept the lazily imported client and record the call."""
+        import openai
+
+        seen: dict[str, object] = {}
+
+        class _Completions:
+            def create(self, **kwargs):
+                seen.update(kwargs)
+                if raises is not None:
+                    raise raises
+                message = type("M", (), {"content": '{"criteria": []}'})()
+                choice = type("C", (), {"message": message})()
+                return type("R", (), {"choices": [choice]})()
+
+        class _Client:
+            def __init__(self, **kwargs):
+                seen["_init"] = kwargs
+                self.chat = type("Chat", (), {"completions": _Completions()})()
+
+        monkeypatch.setattr(openai, "OpenAI", _Client)
+        return seen
+
+    def test_it_is_selectable_by_name(self) -> None:
+        provider = build_provider(self._settings())
+        assert provider.name == "openrouter"
+
+    def test_the_default_model_is_one_that_can_be_forced_into_json(self) -> None:
+        """A free model without response_format leaves the contract to the prompt."""
+        provider = build_provider(self._settings())
+        assert provider.model == "nvidia/nemotron-3-super-120b-a12b:free"
+
+    def test_the_model_is_overridable_from_secrets(self) -> None:
+        provider = build_provider(
+            self._settings("nvidia/nemotron-3-ultra-550b-a55b:free")
+        )
+        assert provider.model == "nvidia/nemotron-3-ultra-550b-a55b:free"
+
+    def test_it_asks_the_api_to_enforce_json(self, monkeypatch) -> None:
+        seen = self._fake_openai(monkeypatch)
+        build_provider(self._settings()).complete(system="S", user="U")
+        assert seen["response_format"] == {"type": "json_object"}
+
+    def test_it_talks_to_openrouter_and_sends_both_messages(self, monkeypatch) -> None:
+        seen = self._fake_openai(monkeypatch)
+        build_provider(self._settings()).complete(system="S", user="U")
+
+        assert seen["_init"]["base_url"] == "https://openrouter.ai/api/v1"
+        assert [m["role"] for m in seen["messages"]] == ["system", "user"]
+        assert [m["content"] for m in seen["messages"]] == ["S", "U"]
+
+    def test_a_transport_failure_is_ai_unavailable(self, monkeypatch) -> None:
+        """Invariant #10: a dead gateway is a message, not a traceback."""
+        self._fake_openai(monkeypatch, raises=TimeoutError("gateway timeout"))
+
+        with pytest.raises(AIUnavailable, match="gateway timeout"):
+            build_provider(self._settings()).complete(system="S", user="U")

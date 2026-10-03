@@ -41,6 +41,11 @@ google-genai>=1            # decision #4 — Gemini. Imported lazily inside
                            # core/ai/provider.py, so a missing key or SDK is a
                            # readable message rather than a startup failure
 
+openai>=1                  # not OpenAI the vendor — the OpenAI-shaped client,
+                           # used to reach OpenRouter (decision #4). One key,
+                           # many vendors, including models served free.
+                           # Imported lazily inside core/ai/provider.py
+
 # --- Phase 5b: orchestration ---
 langgraph>=0.2             # the evaluation graph; imported only inside core/ai
 langgraph-checkpoint-sqlite>=2  # SqliteSaver — resumes a run after a Streamlit

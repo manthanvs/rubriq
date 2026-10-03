@@ -26,7 +26,7 @@ is no request boundary to hang authorisation on, and nothing in it is testable
 without a browser. Putting the domain on the other side of a hard line gets
 the benefits without accepting the costs:
 
-* The domain is unit-testable. 607 of the 646 tests need no Streamlit runtime
+* The domain is unit-testable. 613 of the 652 tests need no Streamlit runtime
   at all.
 * Authorisation is a property of a function signature — `actor` first,
   scoping in SQL — rather than something the UI is trusted to do.
