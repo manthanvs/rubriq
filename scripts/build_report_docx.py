@@ -734,8 +734,11 @@ DEFECTS = [
 # -- 7. Results -----------------------------------------------------------
 
 RESULTS = [
-    "The system was demonstrated end to end against a seeded cohort of eight "
-    "students, built by a single command and deliberately uneven: one "
+    "The system was demonstrated end to end against a seeded cohort of "
+    "sixty-seven students, built by a single command. The people in it are "
+    "invented: a public repository is no place for a real class list, and "
+    "the schema has nowhere to put most of what a real one carries. Eight "
+    "of them are hand-made and deliberately uneven: one "
     "submission on time, one a day late, one two days late, one four days late "
     "and therefore absent, one student who never submitted, one blocked by a "
     "mandatory rubric point with no evidence, one with a version history, one "

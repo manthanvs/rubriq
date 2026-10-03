@@ -108,7 +108,10 @@ SECRETS = REPO_ROOT / ".streamlit" / "secrets.toml"
 DEFAULT_FACULTY = "guide@pccoepune.org"
 
 #: (name, prn, days late relative to the deadline, or None for "never submitted")
-COHORT: tuple[tuple[str, str, int | None], ...] = (
+#:
+#: These eight are hand-made and each one carries a condition the demo script
+#: in docs/deployment.md §8 walks through. Do not renumber or reorder them.
+COHORT_CASES: tuple[tuple[str, str, int | None], ...] = (
     ("Manthan Sankpal", "125M1H064", 0),
     ("Rahul Deshmukh", "125M1H071", 1),
     ("Priya Kulkarni", "125M1H072", 2),
@@ -118,6 +121,82 @@ COHORT: tuple[tuple[str, str, int | None], ...] = (
     ("Rohit Jadhav", "125M1H076", 0),
     ("Neha Pawar", "125M1H077", None),  # never submitted
 )
+
+#: The rest of the class.
+#:
+#: Invented people. A public repository is no place for a real roster, and the
+#: schema has nowhere to put most of what a real one carries anyway — User
+#: holds an email, a name and a PRN, not a phone number or a date of birth.
+#:
+#: PRNs sit in the 1xx range on purpose: the real cohort this stands in for is
+#: numbered 001-067, so nothing here can be mistaken for somebody.
+#:
+#: The eight above are the interesting states. These exist so the grid, the
+#: distribution chart and the exported spreadsheet look like a class rather
+#: than a fixture — a histogram of five marks tells a reviewer nothing.
+COHORT_EXTRA: tuple[tuple[str, str, int | None], ...] = (
+    ("Ajinkya Bhonsle", "125M1H101", 0),
+    ("Rutuja Khedkar", "125M1H102", 0),
+    ("Omkar Salvi", "125M1H103", 1),
+    ("Isha Rane", "125M1H104", 0),
+    ("Prathamesh Gokhale", "125M1H105", 0),
+    ("Sanika Dharmadhikari", "125M1H106", 2),
+    ("Tanmay Bhide", "125M1H107", 0),
+    ("Mrunal Kadam", "125M1H108", 0),
+    ("Harshad Nalawade", "125M1H109", 0),
+    ("Devika Ranade", "125M1H110", 1),
+    ("Siddhesh Phadke", "125M1H111", 0),
+    ("Anushka Deo", "125M1H112", 0),
+    ("Yash Chavan", "125M1H113", 3),
+    ("Gauri Limaye", "125M1H114", 0),
+    ("Nikhil Walunj", "125M1H115", 0),
+    ("Shruti Ambekar", "125M1H116", 0),
+    ("Atharva Joglekar", "125M1H117", 1),
+    ("Pooja Shelar", "125M1H118", 0),
+    ("Rohan Vaidya", "125M1H119", 0),
+    ("Ketaki Sathe", "125M1H120", 0),
+    ("Soham Marathe", "125M1H121", 5),  # absent under §5.1
+    ("Apurva Bapat", "125M1H122", 0),
+    ("Kaustubh Hegde", "125M1H123", 0),
+    ("Smita Inamdar", "125M1H124", 0),
+    ("Parth Dandekar", "125M1H125", 2),
+    ("Vaidehi Kelkar", "125M1H126", 0),
+    ("Suyash Gadre", "125M1H127", 0),
+    ("Namrata Bhave", "125M1H128", None),  # never submitted
+    ("Chaitanya Pethe", "125M1H129", 0),
+    ("Radhika Oak", "125M1H130", 0),
+    ("Aniruddha Karve", "125M1H131", 1),
+    ("Snehal Tambe", "125M1H132", 0),
+    ("Vedant Chitale", "125M1H133", 0),
+    ("Manasi Godbole", "125M1H134", 0),
+    ("Pranav Barve", "125M1H135", 0),
+    ("Tejashri Paranjape", "125M1H136", 3),
+    ("Akshay Dabhade", "125M1H137", 0),
+    ("Sayali Abhyankar", "125M1H138", 0),
+    ("Nachiket Soman", "125M1H139", 0),
+    ("Bhagyashree Mane", "125M1H140", 1),
+    ("Darshan Kulthe", "125M1H141", 0),
+    ("Trupti Wagh", "125M1H142", 0),
+    ("Shubham Garud", "125M1H143", 0),
+    ("Aarti Jagtap", "125M1H144", 0),
+    ("Mihir Talwalkar", "125M1H145", 2),
+    ("Kalyani Padhye", "125M1H146", 0),
+    ("Rushikesh Bhoir", "125M1H147", 0),
+    ("Prachi Kurne", "125M1H148", None),  # never submitted
+    ("Saurabh Lokhande", "125M1H149", 0),
+    ("Minal Barhate", "125M1H150", 0),
+    ("Advait Ghaisas", "125M1H151", 0),
+    ("Rasika Kanitkar", "125M1H152", 1),
+    ("Tushar Mhatre", "125M1H153", 0),
+    ("Prerana Jadhavar", "125M1H154", 0),
+    ("Kedar Apte", "125M1H155", 0),
+    ("Nupur Dalvi", "125M1H156", 4),  # absent under §5.1
+    ("Hrishikesh Bodas", "125M1H157", 0),
+    ("Avani Pandit", "125M1H158", 0),
+    ("Girish Nimbalkar", "125M1H159", 0),
+)
+
+COHORT: tuple[tuple[str, str, int | None], ...] = COHORT_CASES + COHORT_EXTRA
 
 #: The GitHub accounts faculty have on record (decision #6). Deliberately not
 #: everyone: a student with no account on record cannot submit a link at all,
@@ -591,6 +670,30 @@ def build(
         "Rohit Jadhav": {"C1": 0, "C2": 7, "C3": 6},
     }
     approve_for = {"Manthan Sankpal", "Aditi Joshi", "Priya Kulkarni"}
+
+    # The rest of the class, scored from the PRN rather than at random, so
+    # `make reseed` produces the same spreadsheet every time. A seeded RNG
+    # would do too, but a pure function needs no seed to be reproducible and
+    # reads as arithmetic rather than as a dice roll.
+    #
+    # The shape is deliberate: a believable mean with both tails present, a
+    # few left unscored so the needs-attention filter has work to do, and one
+    # in nine left unapproved so Approved and Pending are visibly different
+    # states in the grid rather than a column of ticks.
+    for name, prn, late in COHORT_EXTRA:
+        if late is None:
+            continue  # never submitted: no submission to score
+        seed = int(prn[-3:])
+        if seed % 11 == 0:
+            marks[name] = None  # unscored, needs a human
+            continue
+        marks[name] = {
+            "C1": 4 + (seed * 3) % 7,
+            "C2": 4 + (seed * 5) % 7,
+            "C3": 3 + (seed * 7) % 8,
+        }
+        if seed % 9 != 0:
+            approve_for.add(name)
 
     for name, scores in marks.items():
         if scores is None:
