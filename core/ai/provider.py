@@ -129,13 +129,15 @@ def build_provider(settings: Settings) -> LLMProvider:
         return _GeminiProvider(settings.llm_api_key or "", settings.llm_model or "")
     if provider == "groq":
         return _GroqProvider(settings.llm_api_key or "", settings.llm_model or "")
-    if provider == "openrouter":
-        return _OpenRouterProvider(
-            settings.llm_api_key or "", settings.llm_model or ""
+    if provider in OPENAI_COMPATIBLE:
+        gateway = OPENAI_COMPATIBLE[provider]
+        return _OpenAICompatibleProvider(
+            gateway, settings.llm_api_key or "", settings.llm_model or ""
         )
 
     raise AIUnavailable(
-        f"Unknown AI provider {provider!r}. Supported: gemini, groq, openrouter."
+        f"Unknown AI provider {provider!r}. "
+        "Supported: gemini, groq, openrouter, nvidia."
     )
 
 
@@ -212,64 +214,101 @@ class _GroqProvider:
 
 
 
-class _OpenRouterProvider:
-    """OpenRouter — a gateway, not a model, which is the point.
+@dataclass(frozen=True, slots=True)
+class Gateway:
+    """An OpenAI-shaped endpoint, named so the choice is config, not code."""
 
-    One key reaches many vendors, including models served at no cost. The API
-    is OpenAI-shaped, so this is the Groq implementation with a different base
-    URL and two extra headers that OpenRouter asks senders to set.
+    name: str
+    base_url: str
+    default_model: str
+    #: OpenRouter attributes traffic with these; NVIDIA ignores them. Neither
+    #: is a secret and neither has to resolve.
+    headers: tuple[tuple[str, str], ...] = ()
 
-    **Pick a model that supports ``response_format``.** §6.5 requires JSON and
-    nothing else, and the contract is far stronger when the API enforces it
-    than when only the prompt asks for it. Not every free model does: at the
-    time of writing ``nemotron-3-super-120b-a12b:free`` advertises
-    ``response_format`` and the larger ``nemotron-3-ultra-550b-a55b:free``
-    does not. The parameter is sent anyway — OpenRouter ignores what a model
-    cannot honour — so a model without it still works, falling back on the
-    prompt and the repair loop. It is simply less reliable, and a parse
-    failure there costs a criterion rather than erroring loudly.
 
-    Check before choosing one::
+#: Both reach the same Nemotron weights. OpenRouter is a broker and marks
+#: no-cost variants with a ``:free`` suffix; NVIDIA serves its own models
+#: directly and does not. Keeping the model ids here rather than in prose is
+#: what stops the two being confused.
+OPENAI_COMPATIBLE = {
+    "openrouter": Gateway(
+        name="openrouter",
+        base_url="https://openrouter.ai/api/v1",
+        default_model="nvidia/nemotron-3-super-120b-a12b:free",
+        headers=(
+            ("HTTP-Referer", "https://github.com/manthanvs/rubriq"),
+            ("X-Title", "RubriQ"),
+        ),
+    ),
+    "nvidia": Gateway(
+        name="nvidia",
+        base_url="https://integrate.api.nvidia.com/v1",
+        default_model="nvidia/nemotron-3-super-120b-a12b",
+    ),
+}
+
+
+class _OpenAICompatibleProvider:
+    """Any endpoint that speaks the OpenAI chat API — decision #4, extended.
+
+    This is the Groq implementation with the base URL lifted into
+    configuration. It covers OpenRouter (one key, many vendors, several models
+    served at no cost) and NVIDIA's own hosted endpoint.
+
+    **Prefer a model that supports ``response_format``.** §6.5 wants JSON and
+    nothing else, and a contract the API enforces beats one the prompt merely
+    requests. ``nemotron-3-super-120b-a12b`` advertises it; the larger
+    ``nemotron-3-ultra-550b-a55b`` does not, and falls back on the prompt plus
+    the repair loop — quietly, since a parse failure costs a criterion rather
+    than raising. Check before choosing::
 
         curl -s https://openrouter.ai/api/v1/models | jq '.data[]
           | select(.id|test("free")) | {id, supported_parameters}'
+
+    A gateway that *rejects* ``response_format`` rather than ignoring it would
+    otherwise make every call fail, so that one case retries without it. The
+    retry is narrow on purpose: it fires only when the error names the
+    parameter, so a genuine outage still surfaces as an outage.
     """
 
-    name = "openrouter"
-    DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
-    BASE_URL = "https://openrouter.ai/api/v1"
-
-    def __init__(self, api_key: str, model: str = "") -> None:
+    def __init__(self, gateway: Gateway, api_key: str, model: str = "") -> None:
+        self._gateway = gateway
         self._api_key = api_key
-        self.model = model or self.DEFAULT_MODEL
+        self.name = gateway.name
+        self.model = model or gateway.default_model
 
     def complete(self, *, system: str, user: str) -> str:
         try:
             from openai import OpenAI
         except ImportError as exc:
             raise AIUnavailable(
-                "The OpenRouter provider needs the openai package installed."
+                f"The {self.name} provider needs the openai package installed."
             ) from exc
 
+        client = OpenAI(api_key=self._api_key, base_url=self._gateway.base_url)
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ]
+        extra = dict(self._gateway.headers)
+
         try:
-            client = OpenAI(api_key=self._api_key, base_url=self.BASE_URL)
-            completion = client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ],
-                response_format={"type": "json_object"},
-                extra_headers={
-                    # OpenRouter attributes traffic with these. Neither is a
-                    # secret and neither has to resolve.
-                    "HTTP-Referer": "https://github.com/manthanvs/rubriq",
-                    "X-Title": "RubriQ",
-                },
-            )
+            try:
+                completion = client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    response_format={"type": "json_object"},
+                    extra_headers=extra,
+                )
+            except Exception as exc:
+                if "response_format" not in str(exc):
+                    raise
+                completion = client.chat.completions.create(
+                    model=self.model, messages=messages, extra_headers=extra
+                )
             return completion.choices[0].message.content or ""
         except Exception as exc:
-            raise AIUnavailable(f"OpenRouter could not be reached: {exc}") from exc
+            raise AIUnavailable(f"{self.name} could not be reached: {exc}") from exc
 
 # -- the public function -------------------------------------------------
 

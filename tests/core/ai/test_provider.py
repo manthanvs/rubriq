@@ -370,33 +370,40 @@ class TestPromptShape:
         assert "checked against the submission" in provider.system
 
 
-class TestOpenRouterProvider:
-    """OpenRouter is a gateway, so what matters is what we send it.
+class TestOpenAICompatibleGateways:
+    """OpenRouter and NVIDIA reach the same weights through the same API.
 
-    No live call: the point is the request shape, which is what decides
-    whether §6.5's JSON contract is enforced by the API or only requested by
-    the prompt.
+    No live call: what matters is the request shape, because that is what
+    decides whether §6.5's JSON contract is enforced by the API or only
+    requested by the prompt.
     """
 
     @staticmethod
-    def _settings(model: str = "") -> Settings:
+    def _settings(provider: str = "openrouter", model: str = "") -> Settings:
         return Settings(
             database_url="sqlite://",
-            llm_provider="openrouter",
+            llm_provider=provider,
             llm_api_key="test-key",
             llm_model=model,
         )
 
     def _fake_openai(self, monkeypatch, *, raises: Exception | None = None):
-        """Intercept the lazily imported client and record the call."""
+        """Intercept the lazily imported client and record what it was sent.
+
+        Construction and completion are recorded separately — counting them
+        together is how the first version of this double never fired its
+        simulated failure.
+        """
         import openai
 
-        seen: dict[str, object] = {}
+        class Recorder:
+            init: list[dict] = []
+            attempts: list[dict] = []
 
         class _Completions:
             def create(self, **kwargs):
-                seen.update(kwargs)
-                if raises is not None:
+                Recorder.attempts.append(kwargs)
+                if raises is not None and len(Recorder.attempts) == 1:
                     raise raises
                 message = type("M", (), {"content": '{"criteria": []}'})()
                 choice = type("C", (), {"message": message})()
@@ -404,43 +411,76 @@ class TestOpenRouterProvider:
 
         class _Client:
             def __init__(self, **kwargs):
-                seen["_init"] = kwargs
+                Recorder.init.append(kwargs)
                 self.chat = type("Chat", (), {"completions": _Completions()})()
 
+        Recorder.init, Recorder.attempts = [], []
         monkeypatch.setattr(openai, "OpenAI", _Client)
-        return seen
+        return Recorder
 
-    def test_it_is_selectable_by_name(self) -> None:
-        provider = build_provider(self._settings())
-        assert provider.name == "openrouter"
+    @pytest.mark.parametrize(
+        ("provider", "base_url", "default_model"),
+        [
+            (
+                "openrouter",
+                "https://openrouter.ai/api/v1",
+                "nvidia/nemotron-3-super-120b-a12b:free",
+            ),
+            (
+                "nvidia",
+                "https://integrate.api.nvidia.com/v1",
+                "nvidia/nemotron-3-super-120b-a12b",
+            ),
+        ],
+    )
+    def test_each_gateway_is_selectable_and_has_its_own_defaults(
+        self, provider, base_url, default_model, monkeypatch
+    ) -> None:
+        """The ``:free`` suffix is OpenRouter's, not NVIDIA's. Confusing the
+        two is a 404 at the worst moment."""
+        built = build_provider(self._settings(provider))
+        assert built.name == provider
+        assert built.model == default_model
 
-    def test_the_default_model_is_one_that_can_be_forced_into_json(self) -> None:
-        """A free model without response_format leaves the contract to the prompt."""
-        provider = build_provider(self._settings())
-        assert provider.model == "nvidia/nemotron-3-super-120b-a12b:free"
+        rec = self._fake_openai(monkeypatch)
+        built.complete(system="S", user="U")
+        assert rec.init[0]["base_url"] == base_url
 
     def test_the_model_is_overridable_from_secrets(self) -> None:
-        provider = build_provider(
-            self._settings("nvidia/nemotron-3-ultra-550b-a55b:free")
+        built = build_provider(
+            self._settings("openrouter", "nvidia/nemotron-3-ultra-550b-a55b:free")
         )
-        assert provider.model == "nvidia/nemotron-3-ultra-550b-a55b:free"
+        assert built.model == "nvidia/nemotron-3-ultra-550b-a55b:free"
 
     def test_it_asks_the_api_to_enforce_json(self, monkeypatch) -> None:
-        seen = self._fake_openai(monkeypatch)
+        rec = self._fake_openai(monkeypatch)
         build_provider(self._settings()).complete(system="S", user="U")
-        assert seen["response_format"] == {"type": "json_object"}
+        assert rec.attempts[0]["response_format"] == {"type": "json_object"}
 
-    def test_it_talks_to_openrouter_and_sends_both_messages(self, monkeypatch) -> None:
-        seen = self._fake_openai(monkeypatch)
+    def test_both_messages_are_sent_in_order(self, monkeypatch) -> None:
+        rec = self._fake_openai(monkeypatch)
         build_provider(self._settings()).complete(system="S", user="U")
+        assert [m["role"] for m in rec.attempts[0]["messages"]] == ["system", "user"]
+        assert [m["content"] for m in rec.attempts[0]["messages"]] == ["S", "U"]
 
-        assert seen["_init"]["base_url"] == "https://openrouter.ai/api/v1"
-        assert [m["role"] for m in seen["messages"]] == ["system", "user"]
-        assert [m["content"] for m in seen["messages"]] == ["S", "U"]
+    def test_a_gateway_that_rejects_response_format_is_retried_without_it(
+        self, monkeypatch
+    ) -> None:
+        """Not every endpoint ignores what it cannot honour; some 400 on it."""
+        rejection = ValueError("400: unsupported parameter: response_format")
+        rec = self._fake_openai(monkeypatch, raises=rejection)
 
-    def test_a_transport_failure_is_ai_unavailable(self, monkeypatch) -> None:
-        """Invariant #10: a dead gateway is a message, not a traceback."""
-        self._fake_openai(monkeypatch, raises=TimeoutError("gateway timeout"))
+        assert build_provider(self._settings()).complete(system="S", user="U")
+
+        assert len(rec.attempts) == 2, "should have retried exactly once"
+        assert "response_format" in rec.attempts[0]
+        assert "response_format" not in rec.attempts[1]
+
+    def test_an_unrelated_failure_is_not_retried(self, monkeypatch) -> None:
+        """The retry is narrow: an outage must still look like an outage."""
+        rec = self._fake_openai(monkeypatch, raises=TimeoutError("gateway timeout"))
 
         with pytest.raises(AIUnavailable, match="gateway timeout"):
             build_provider(self._settings()).complete(system="S", user="U")
+
+        assert len(rec.attempts) == 1, "must not retry"
