@@ -33,6 +33,20 @@ def _to_page(spec: PageSpec) -> st.Page:
     )
 
 
+def page_path_for(role, key: str) -> Path | None:
+    """The absolute path of a page, but only if this role may see it.
+
+    Links are built from the same spec list as the sidebar, so a link can
+    never point somewhere the signed-in role has no page for. Returning
+    ``None`` rather than raising lets a caller simply not draw the link —
+    which is what a student should get, not an error.
+    """
+    for spec in pages_for(role):
+        if spec.key == key:
+            return APP_DIR / spec.path
+    return None
+
+
 def build_navigation(actor: Actor):
     """Build the sidebar for this actor, grouped by section."""
     grouped: dict[str, list[st.Page]] = {}

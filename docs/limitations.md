@@ -136,7 +136,7 @@ configuration rather than a constant.
 
 ## 10. What the tests do and do not prove
 
-657 tests pass, and it is worth being precise about what that means.
+668 tests pass, and it is worth being precise about what that means.
 
 **They do prove:** the scoring arithmetic matches §5.1 row by row and at every
 boundary; a published rubric cannot be edited; a student cannot reach another

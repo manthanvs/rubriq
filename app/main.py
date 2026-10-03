@@ -20,6 +20,7 @@ from typing import Any
 import streamlit as st
 
 from app.bootstrap import ensure_database
+from app.components.theme import inject_css
 from app.navigation import build_navigation
 from app.state import SIGNED_IN_EMAIL_KEY, render_flash
 from core.auth.actor import Actor
@@ -234,6 +235,7 @@ def main() -> None:
             icon=":material/warning:",
         )
 
+    inject_css()
     _render_identity(actor, health.ok)
 
     # Fix item 14: one call, above whichever page runs. A per-page render_flash()
