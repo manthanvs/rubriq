@@ -182,38 +182,83 @@ during a viva without a query.
 
 ---
 
-## 7. Deployment path, and why it was not taken
+## 7. Deployment
 
 **Streamlit Community Cloud** is the natural host: point it at the repository,
 paste the secrets into its UI, and it serves the app.
 
-It was not used for this project, for three reasons that are worth stating
-plainly rather than glossing:
+There are two different questions here, and collapsing them produces a bad
+answer to both.
+
+### 7.1 Production, with real student data — not done, deliberately
+
+Three reasons, worth stating plainly rather than glossing:
 
 1. **SQLite on Community Cloud is ephemeral.** The filesystem is not durable
    across restarts or redeploys. Marks would disappear, which for a system
    whose entire purpose is recording marks is disqualifying. Real deployment
-   would mean a managed Postgres — a URL change in `core/db/engine.py`, since
-   nothing outside `core/db/` knows the dialect, plus reinstating `psycopg`.
+   would mean a managed Postgres — a URL change, since nothing outside
+   `core/db/` knows the dialect, plus reinstating `psycopg`.
 2. **Real student data.** Names, PRNs, and submitted work are personal data.
    Putting them on a free tier of a third-party host without an institutional
    decision is not the student's call to make.
 3. **The LLM key.** A key in a public deployment's secrets is a key with a
    billing account attached to it.
 
-The honest position: the app is deployable, the deployment is a routine
-exercise, and it was not done because the data is real. That is a stronger
-answer in a viva than a hosted demo full of fake names.
+What production would take: provision managed Postgres and set
+`[database] url`; `pip install psycopg[binary]`; `alembic upgrade head`
+against it; move uploads to object storage, where
+`core/submissions/storage.py` is the only module that touches the filesystem;
+register the deployed callback URL with the Google OAuth client.
 
-### If it were deployed
+### 7.2 A demo deployment, with seeded data — supported
 
-1. Provision managed Postgres, set `[database] url` to its connection string.
-2. `pip install psycopg[binary]`.
-3. Run `alembic upgrade head` against it.
-4. Move uploads to object storage — `core/submissions/storage.py` is the only
-   module that touches the filesystem.
-5. Register the deployed callback URL with the Google OAuth client.
-6. Delete `[dev]` from the secrets, and confirm the warning banner is gone.
+Every objection above is an objection to hosting *real marks*. A deployment
+carrying only the seeded demo cohort meets none of them: there is no personal
+data to leak, an ephemeral filesystem is no loss when the database is rebuilt
+from seed anyway, and the LLM key can simply be omitted — AI evaluation then
+reports that it is unavailable and everything deterministic still works, which
+is invariant #10 demonstrated rather than described.
+
+One thing had to be built for this to work at all. The host runs
+`streamlit run app/main.py` and nothing else: there is no shell, so `make seed`
+never happens and the app would start against a database that does not exist.
+`app/bootstrap.py` closes that — it migrates on first boot and seeds the demo
+cohort if no user exists yet.
+
+It is **off unless `[deploy] bootstrap` is true**, and it refuses to touch a
+database that already holds a user. Both guards matter and neither is
+redundant: the emptiness check is what stops a redeploy dropping demo rows
+onto real marks, and the flag is what stops that check from being the only
+thing standing in the way. `tests/app/test_bootstrap.py` asserts both
+negatives.
+
+**Steps**
+
+1. Push to GitHub — Community Cloud deploys from a repository, not an upload.
+2. At <https://share.streamlit.io>, sign in with GitHub and create an app from
+   `manthanvs/rubriq`, branch `main`, main file path `app/main.py`.
+3. Paste the contents of `.streamlit/secrets.toml` into **Advanced settings →
+   Secrets**, with these changes:
+   - add `[deploy]` with `bootstrap = true`
+   - set `[auth] redirect_uri` to `https://<your-app>.streamlit.app/oauth2callback`
+   - omit the `[llm]` section unless a throwaway key with a spend cap is used
+   - keep `[rubriq] faculty_allowlist` — its first address owns the seeded
+     subject
+4. In the Google Cloud console, add that same `https://…/oauth2callback` as an
+   authorised redirect URI on the OAuth client. The deployed URL is a second
+   URI, not a replacement: keep `http://localhost:8501/oauth2callback` so local
+   development still works.
+5. While the OAuth consent screen is in **Testing**, add every address that
+   will sign in under **Audience → Test users**. An address that is not listed
+   fails with `access_denied` before RubriQ sees it, so this looks like an app
+   bug and is not one.
+6. Open the app. The first load migrates and seeds, which takes a few seconds
+   and shows a toast saying what it created.
+
+**Set `bootstrap = false` again once it has run.** It is idempotent, so leaving
+it on is survivable, but a flag that only needed to be true once should not
+stay true.
 
 ---
 

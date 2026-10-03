@@ -18,7 +18,7 @@ authority, the intelligence is assistive.
 | Course | MCA Semester III — Mini Project, MCA33EL03 |
 | Guide | Prof. Dr. Anjana Arakerimath (HOD) |
 | Institute | Pimpri Chinchwad College of Engineering, Pune |
-| Tests | 628, all passing |
+| Tests | 632, all passing |
 
 ---
 
@@ -76,7 +76,7 @@ core/    auth · academics · rubrics · submissions · scoring · ai · exports
 ```
 
 It is enforced by a test that searches every file under `core/` for a Streamlit
-import and fails if it finds one. That rule is why 587 of the 628 tests need no
+import and fails if it finds one. That rule is why 593 of the 632 tests need no
 browser at all, why access control is a property of a function signature rather
 than something the UI is trusted to do, and why the answer to *"why not a real
 web framework?"* is "swap `app/` and keep the rest" rather than a shrug.
@@ -122,7 +122,7 @@ reasoning.
 ## Commands
 
 ```bash
-make test          # 628 tests
+make test          # 632 tests
 make lint          # ruff
 make seed          # build the demo cohort
 make reseed        # wipe and rebuild it

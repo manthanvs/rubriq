@@ -331,10 +331,25 @@ def reset(factory) -> None:
         session.execute(delete(User))
 
 
-def build(settings: Settings) -> dict[str, int]:
-    """Create the dataset. Returns a summary for printing."""
+def build(
+    settings: Settings,
+    *,
+    faculty_email: str | None = None,
+    faculty_name: str | None = None,
+) -> dict[str, int]:
+    """Create the dataset. Returns a summary for printing.
+
+    The owner is a parameter as well as a module constant because a deployed
+    instance has no ``secrets.toml`` on disk for ``_load_overrides`` to read —
+    it is handed its allow-list by the host's own secrets store. See
+    ``app/bootstrap.py``.
+    """
+    owner = (faculty_email or FACULTY).strip().lower()
+    owner_name = faculty_name or (
+        FACULTY_NAME if owner == FACULTY else _display_name(owner)
+    )
     factory = build_session_factory(build_engine(settings))
-    faculty = _actor(FACULTY, Role.FACULTY, FACULTY_NAME)
+    faculty = _actor(owner, Role.FACULTY, owner_name)
     counts = {
         "students": 0,
         "groups_granted": 0,
@@ -349,15 +364,15 @@ def build(settings: Settings) -> dict[str, int]:
 
     # -- faculty, subject, cycle -------------------------------------
     with session_scope(factory) as session:
-        if session.get(User, FACULTY) is None:
-            session.add(User(email=FACULTY, role=Role.FACULTY, name=FACULTY_NAME))
+        if session.get(User, owner) is None:
+            session.add(User(email=owner, role=Role.FACULTY, name=owner_name))
             session.flush()
             record(
                 session,
                 actor_email="system:seed_demo",
                 action="user.seeded",
                 entity="User",
-                entity_id=FACULTY,
+                entity_id=owner,
                 payload={"role": "FACULTY"},
             )
 

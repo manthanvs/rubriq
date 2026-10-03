@@ -19,6 +19,7 @@ from typing import Any
 
 import streamlit as st
 
+from app.bootstrap import ensure_database
 from app.navigation import build_navigation
 from app.state import SIGNED_IN_EMAIL_KEY, render_flash
 from core.auth.actor import Actor
@@ -173,12 +174,40 @@ def _ensure_user_row(factory, claims: Mapping[str, Any], settings: Settings) -> 
     st.session_state[SIGNED_IN_EMAIL_KEY] = claims.get("email")
 
 
+def _bootstrap(settings: Settings) -> None:
+    """Create the schema on a host with no shell. Off unless asked for.
+
+    Deployment only — see app/bootstrap.py. A failure here is reported rather
+    than raised, because a half-made database should say so on the page
+    instead of showing a traceback to whoever opened the link.
+    """
+    try:
+        deploy = st.secrets.get("deploy")
+    except Exception:
+        return
+    if not isinstance(deploy, Mapping) or not bool(deploy.get("bootstrap", False)):
+        return
+    owner = settings.faculty_allowlist[0] if settings.faculty_allowlist else ""
+    try:
+        note = ensure_database(settings.database_url, owner, enabled=True)
+    except Exception as exc:  # noqa: BLE001 - shown, not swallowed
+        st.error(
+            f"Could not prepare the database: {exc}",
+            icon=":material/database_off:",
+        )
+        st.stop()
+    if note:
+        st.toast(note, icon=":material/database:")
+
+
 def main() -> None:
     settings, error = _load_settings()
     if settings is None:
         st.title("RubriQ")
         st.error(error, icon=":material/settings:")
         st.stop()
+
+    _bootstrap(settings)
 
     claims = _oidc_claims() or _dev_claims()
     if claims is None:

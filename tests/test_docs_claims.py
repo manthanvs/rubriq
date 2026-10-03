@@ -103,13 +103,16 @@ def test_every_relative_link_resolves(doc: Path) -> None:
     assert not broken, f"{doc.name} has broken links: {broken}"
 
 
-def collected_test_count() -> int:
-    """How many tests actually exist, counted the way pytest counts them."""
+def collected_test_count(*paths: str) -> int:
+    """How many tests actually exist, counted the way pytest counts them.
+
+    With ``paths``, counts only those; with none, the whole suite.
+    """
     import subprocess
     import sys
 
     result = subprocess.run(
-        [sys.executable, "-m", "pytest", "--collect-only", "-q"],
+        [sys.executable, "-m", "pytest", "--collect-only", "-q", *paths],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -140,6 +143,33 @@ def test_the_quoted_test_count_matches_reality() -> None:
 
     assert not wrong, "stale test counts: " + "; ".join(wrong)
 
+
+
+@pytest.mark.slow
+def test_the_streamlit_free_subset_matches_reality() -> None:
+    """Three documents claim "N of the M tests need no Streamlit runtime".
+
+    The total-count test above only matches the literal "<number> tests", so M
+    was checked and N never was. N drifted to two below the truth and stayed
+    there until somebody counted by hand. A derived number needs deriving, not
+    reading.
+    """
+    total = collected_test_count()
+    runtime_bound = collected_test_count("tests/app/test_empty_states.py")
+    assert total > 0 and runtime_bound > 0, "collection failed; the check is vacuous"
+    expected = total - runtime_bound
+
+    wrong = []
+    for doc in markdown_files():
+        text = doc.read_text(encoding="utf-8")
+        for claimed, stated_total in re.findall(r"(\d{3,4}) of the (\d{3,4})", text):
+            if (int(claimed), int(stated_total)) != (expected, total):
+                wrong.append(
+                    f"{doc.name} says {claimed} of {stated_total}, "
+                    f"actual {expected} of {total}"
+                )
+
+    assert not wrong, "stale subset counts: " + "; ".join(wrong)
 
 def test_the_page_list_in_the_srs_matches_the_code() -> None:
     """§8's page list and the real navigation must not drift apart."""

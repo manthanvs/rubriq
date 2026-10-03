@@ -30,6 +30,12 @@ rapidfuzz>=3               # partial_ratio for the anti-hallucination guard
 # --- Dev ---
 pytest>=8                  # tests/core mirrors core/
 ruff>=0.6                  # lint + import order, one tool
+Pillow>=10                 # scripts/*_diagram*.py draw the report figures. It
+                           # arrives anyway as a pdfplumber dependency, which is
+                           # exactly why it is declared here: a transitive
+                           # dependency that one of our own modules imports
+                           # directly is a build that breaks on somebody else's
+                           # release note. Not imported by core/ or app/
 
 google-genai>=1            # decision #4 — Gemini. Imported lazily inside
                            # core/ai/provider.py, so a missing key or SDK is a
