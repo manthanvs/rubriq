@@ -96,6 +96,7 @@ def test_app_main_is_still_not_launchable_directly() -> None:
         ("make.ps1", f"'streamlit', 'run', '{ENTRY_POINT}'"),
         (".claude/launch.json", f'"streamlit", "run", "{ENTRY_POINT}"'),
         ("docs/deployment.md", f"main file path `{ENTRY_POINT}`"),
+        (".devcontainer/devcontainer.json", f"streamlit run {ENTRY_POINT}"),
     ],
 )
 def test_every_launcher_names_the_entry_point(name: str, needle: str) -> None:
