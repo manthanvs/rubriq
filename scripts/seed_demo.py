@@ -198,6 +198,21 @@ COHORT_EXTRA: tuple[tuple[str, str, int | None], ...] = (
 
 COHORT: tuple[tuple[str, str, int | None], ...] = COHORT_CASES + COHORT_EXTRA
 
+#: What the guide wrote on a sheet. Keyed by name so a note belongs to a
+#: student rather than to a position in a loop.
+DEFAULT_FACULTY_NOTE = "Objectives are clear. Number the requirements next time."
+
+FACULTY_NOTES = {
+    "Rohit Jadhav": "C1 is not evidenced anywhere in the document.",
+    "Manthan Sankpal": (
+        "Problem and requirements are the strongest parts — every requirement "
+        "names the module and the test that proves it. Two marks held back and "
+        "both are about process rather than content: the database choice was "
+        "reversed mid-build rather than settled first, and the synopsis was "
+        "signed off after the work was done. Design and diagrams are complete."
+    ),
+}
+
 #: The department's Review 1 rubric, transcribed. Marked 0-5 against the
 #: descriptors below: Excellent 5, Good 4, Satisfactory 2-3, Needs
 #: Improvement 1, Poor 0.
@@ -756,8 +771,40 @@ def build(
 
     # -- scoring --------------------------------------------------------
     # Marked 0-5 against the department descriptors, not out of ten.
+    #
+    # Manthan Sankpal's row is RubriQ assessing itself, against the rubric it
+    # is actually marked by, from evidence that exists in this repository. The
+    # classmates are invented people and their marks are invented with them;
+    # only this row claims to be true, which is why only this row is argued
+    # for below.
+    #
+    #   C1 Problem Definition      5  docs/synopsis.md states the problem, who
+    #                                 it affects and why, with scope declared
+    #                                 in and out.
+    #   C2 Requirements Analysis   5  74 functional and 13 non-functional
+    #                                 requirements, each naming the module
+    #                                 that implements it and the test that
+    #                                 proves it (docs/requirements.md).
+    #   C3 Technology Stack        4  Every choice is recorded with reasoning
+    #                                 (§13), but not all of it was reasoning
+    #                                 done in advance: decision #8 reversed
+    #                                 the database choice mid-build, and the
+    #                                 case for Streamlit-only was strengthened
+    #                                 after it was made. "Good, minor gaps in
+    #                                 justification" is the honest band.
+    #   C4 System Design           5  Six diagrams, a layering rule enforced
+    #                                 by a test rather than by convention, and
+    #                                 the evaluation flow drawn as the state
+    #                                 machine it actually is.
+    #   C5 Synopsis Submission     4  Complete and structured, but decision #7
+    #                                 records that the guide's sign-off came
+    #                                 after the build rather than before it. A
+    #                                 synopsis approved late is not the same
+    #                                 artifact as one approved first.
+    #
+    # 23 of 25. Marking oneself full marks is not an assessment.
     marks = {
-        "Manthan Sankpal": {"C1": 5, "C2": 4, "C3": 5, "C4": 4, "C5": 5},
+        "Manthan Sankpal": {"C1": 5, "C2": 5, "C3": 4, "C4": 5, "C5": 4},
         "Rahul Deshmukh": {"C1": 4, "C2": 4, "C3": 3, "C4": 3, "C5": 4},
         "Priya Kulkarni": {"C1": 4, "C2": 3, "C3": 4, "C4": 3, "C5": 3},
         "Aditi Joshi": {"C1": 5, "C2": 5, "C3": 4, "C4": 4, "C5": 4},
@@ -833,11 +880,7 @@ def build(
                 session,
                 submission_id=submission_id,
                 scores=verdicts,
-                faculty_note=(
-                    "Objectives are clear. Number the requirements next time."
-                    if name != "Rohit Jadhav"
-                    else "C1 is not evidenced anywhere in the document."
-                ),  # noqa: E501
+                faculty_note=FACULTY_NOTES.get(name, DEFAULT_FACULTY_NOTE),
             )
             sheet_id = sheet.id
 
