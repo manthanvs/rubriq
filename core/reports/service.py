@@ -22,7 +22,7 @@ from core.auth.actor import Actor
 from core.scoring.dto import GridRow
 from core.scoring.enums import Verdict
 from core.scoring.grid import list_grid_rows
-from core.scoring.policy import AttendanceStatus
+from core.scoring.policy import AttendanceStatus, GradeBand, grade_band
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +73,10 @@ class MilestoneReport:
     lowest: Decimal | None
     highest: Decimal | None
     bands: tuple[Band, ...]
+    #: The department's named scale, in published order and always complete —
+    #: a band with nobody in it is a fact about the cohort, so it is reported
+    #: as zero rather than omitted.
+    grades: tuple[tuple[GradeBand, int], ...]
     criteria: tuple[CriterionStat, ...]
 
     @property
@@ -128,6 +132,22 @@ def _bands(
         )
 
     return tuple(out)
+
+
+def _grades(
+    marks: list[Decimal], max_marks: Decimal
+) -> tuple[tuple[GradeBand, int], ...]:
+    """Count the cohort into the department's named bands.
+
+    Every band appears, including the empty ones. "Nobody was Poor" is a
+    result; a missing row looks like a question nobody asked.
+    """
+    if max_marks <= 0:
+        return ()
+    counts = dict.fromkeys(GradeBand, 0)
+    for mark in marks:
+        counts[grade_band(mark, max_marks)] += 1
+    return tuple(counts.items())
 
 
 def build_report(actor: Actor, session: Session, *, milestone_id: int) -> MilestoneReport:
@@ -209,6 +229,7 @@ def build_report(actor: Actor, session: Session, *, milestone_id: int) -> Milest
         lowest=min(marks) if marks else None,
         highest=max(marks) if marks else None,
         bands=_bands(marks, max_marks) if marks else (),
+        grades=_grades(marks, max_marks) if marks else (),
         criteria=tuple(stats),
     )
 

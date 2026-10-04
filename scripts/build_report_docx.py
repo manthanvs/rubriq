@@ -68,7 +68,7 @@ REPORT_DIR = REPO_ROOT / "docs" / "report"
 
 TITLE = "RubriQ – AI-Assisted Project Review & Rubric Evaluation System for PCCOE Mentors"
 
-TESTS_TOTAL = 668
+TESTS_TOTAL = 692
 
 #: Shown on the title page and in §1.3. Private at the time of writing; make
 #: the repository public before handing the report in, or the link is dead

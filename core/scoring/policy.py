@@ -128,3 +128,52 @@ DEFAULT_LATE_POLICY = LatePolicy(
         ),
     )
 )
+
+
+class GradeBand(StrEnum):
+    """The department's grading scale, as a named verdict on a total.
+
+    Published for the 50-mark whole (45–50 Excellent, 35–44 Good, 25–34
+    Satisfactory, 15–24 Needs Improvement, 0–14 Poor). Those four boundaries
+    are exactly 90%, 70%, 50% and 30%, so holding the scale as percentages
+    reproduces it on 50 marks and generalises it to a single 25-mark review
+    without inventing a second table to disagree with the first.
+    """
+
+    EXCELLENT = "Excellent"
+    GOOD = "Good"
+    SATISFACTORY = "Satisfactory"
+    NEEDS_IMPROVEMENT = "Needs Improvement"
+    POOR = "Poor"
+
+
+#: (minimum percentage inclusive, band), highest first.
+GRADE_BANDS: tuple[tuple[Decimal, GradeBand], ...] = (
+    (Decimal("90"), GradeBand.EXCELLENT),
+    (Decimal("70"), GradeBand.GOOD),
+    (Decimal("50"), GradeBand.SATISFACTORY),
+    (Decimal("30"), GradeBand.NEEDS_IMPROVEMENT),
+    (Decimal("0"), GradeBand.POOR),
+)
+
+
+def grade_band(total: Decimal, out_of: Decimal) -> GradeBand:
+    """Which band a total falls in.
+
+    A verdict, never an input: nothing recomputes a mark from a band, so this
+    stays a pure classification of a number that `compute_score_sheet` has
+    already decided (invariant #2, fix item 1).
+
+    An ABSENT row has no band — it is a status, not a mark (§5.1), so callers
+    render the status instead of calling this.
+    """
+    if out_of <= 0:
+        raise ValidationError("out_of must be positive to band a total.")
+    if total < 0:
+        raise ValidationError("A total cannot be negative.")
+
+    percent = (total / out_of) * Decimal("100")
+    for floor, band in GRADE_BANDS:
+        if percent >= floor:
+            return band
+    return GradeBand.POOR

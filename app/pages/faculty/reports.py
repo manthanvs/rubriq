@@ -96,6 +96,21 @@ with right:
     st.metric("Median", f"{report.median:g}")
     st.caption(f"Range {report.lowest:g} — {report.highest:g}")
 
+st.subheader("Grading scale")
+st.caption(
+    "The department's published bands — 45–50 Excellent, 35–44 Good, 25–34 "
+    "Satisfactory, 15–24 Needs Improvement, 0–14 Poor — applied to this "
+    "review's marks. Absent students are excluded, as above."
+)
+
+if report.grades:
+    columns = st.columns(len(report.grades))
+    for column, (band, count) in zip(columns, report.grades, strict=True):
+        column.metric(str(band), count, border=True)
+else:
+    st.caption("No marks to band yet.")
+
+st.divider()
 st.subheader("Where the cohort struggled")
 
 st.caption(

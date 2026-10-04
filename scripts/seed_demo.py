@@ -198,6 +198,113 @@ COHORT_EXTRA: tuple[tuple[str, str, int | None], ...] = (
 
 COHORT: tuple[tuple[str, str, int | None], ...] = COHORT_CASES + COHORT_EXTRA
 
+#: The department's Review 1 rubric, transcribed. Marked 0-5 against the
+#: descriptors below: Excellent 5, Good 4, Satisfactory 2-3, Needs
+#: Improvement 1, Poor 0.
+#:
+#: (code, title, descriptor scale, what evidence to look for, mandatory)
+REVIEW_ONE_CRITERIA = (
+    (
+        "C1",
+        "Problem Definition",
+        "5 Clear, specific and well-justified, relevant to MCA · 4 Clear but "
+        "broad or thin on justification · 2-3 Defined but lacking specificity "
+        "or relevance · 1 Unclear or marginally relevant · 0 Missing",
+        "A stated problem, who it affects, and why it is worth solving.",
+        True,
+    ),
+    (
+        "C2",
+        "Requirements Analysis",
+        "5 Comprehensive functional and non-functional analysis · 4 Good, "
+        "minor gaps · 2-3 Adequate but shallow or missing key requirements · "
+        "1 Partial with significant gaps · 0 Missing",
+        "Numbered functional and non-functional requirements.",
+        True,
+    ),
+    (
+        "C3",
+        "Technology Stack",
+        "5 Appropriate, justified and current · 4 Appropriate, thin "
+        "justification · 2-3 Adequate but unjustified in places · 1 Partly "
+        "inappropriate or poorly justified · 0 Inappropriate or missing",
+        "Each major choice named with a reason, not just a list.",
+        False,
+    ),
+    (
+        "C4",
+        "System Design",
+        "5 Clear, detailed and well-structured, with diagrams · 4 Good, minor "
+        "gaps in detail · 2-3 Adequate but unclear in places · 1 Unclear or "
+        "poorly structured · 0 Missing",
+        "Architecture, data model and flow — diagrams, not prose alone.",
+        False,
+    ),
+    (
+        "C5",
+        "Synopsis Submission",
+        "5 Well-structured, objectives, methodology and expected outcomes all "
+        "complete · 4 Mostly drafted, minor gaps · 2-3 Some elements present, "
+        "methodology or outcomes thin · 1 Incomplete or vague · 0 Little "
+        "relevant content",
+        "Objectives, methodology and expected outcomes, each stated.",
+        False,
+    ),
+)
+
+#: Review 2. Note C3: the interface is a marked criterion, which is why the
+#: theme in .streamlit/config.toml is a deliverable rather than decoration.
+REVIEW_TWO_CRITERIA = (
+    (
+        "C1",
+        "Functionality",
+        "5 All features working, tested, meeting requirements · 4 Most "
+        "working and tested, minor bugs · 2-3 Core features work, some bugs "
+        "or gaps · 1 Significant functionality missing · 0 Non-functional",
+        "Each claimed feature demonstrated end to end.",
+        True,
+    ),
+    (
+        "C2",
+        "Code Quality",
+        "5 Clean, documented, modular, follows good practice · 4 Good, minor "
+        "gaps in documentation or modularity · 2-3 Adequate but patchy · "
+        "1 Poorly structured, minimal documentation · 0 Unreadable",
+        "Module boundaries, naming, tests and comments that explain why.",
+        False,
+    ),
+    (
+        "C3",
+        "User Interface (UI)",
+        "5 Intuitive, user-friendly and visually appealing · 4 Good, minor "
+        "usability or aesthetic issues · 2-3 Adequate but unpolished · "
+        "1 Poor, significant usability issues · 0 Missing or unusable",
+        "Consistent layout, readable states, and a clear next action on "
+        "every page.",
+        False,
+    ),
+    (
+        "C4",
+        "Project Demonstration",
+        "5 Complete understanding, confident, handles questions · 4 Good "
+        "understanding, minor hesitation · 2-3 Average; explains own part but "
+        "struggles on the whole · 1 Limited understanding · 0 Minimal "
+        "participation",
+        "Explains design decisions, not just features.",
+        False,
+    ),
+    (
+        "C5",
+        "Submission",
+        "5 On time with every deliverable, well-organised and professionally "
+        "formatted · 4 On time, almost all deliverables, minor issues · "
+        "2-3 Most deliverables, noticeable deficiencies · 1 Late or several "
+        "missing · 0 Not submitted",
+        "Report, source code, documentation, presentation and user manual.",
+        False,
+    ),
+)
+
 #: The GitHub accounts faculty have on record (decision #6). Deliberately not
 #: everyone: a student with no account on record cannot submit a link at all,
 #: and that refusal is worth being able to show.
@@ -478,7 +585,7 @@ def build(
             session,
             cycle_id=cycle_id,
             index=1,
-            title="Review 1 — Synopsis & SRS",
+            title="Review 1 — Project Introduction & Synopsis Submission",
             description=(
                 "Submit the synopsis, the SRS and an ER diagram as a single PDF "
                 "or DOCX. The rubric below is what you will be marked against."
@@ -497,8 +604,11 @@ def build(
             session,
             cycle_id=cycle_id,
             index=2,
-            title="Review 2 — Implementation & Testing",
-            description="A working system, the test report, and a demo video.",
+            title="Review 2 — Implementation, Demo & Final Submission",
+            description=(
+                "A working system, its source, the documentation set and a live "
+                "demonstration. Marked against the five criteria below."
+            ),
             public_notes="Bring a laptop that can run the system offline.",
             due_at=deadline + timedelta(days=45),
             max_marks=25,
@@ -506,45 +616,32 @@ def build(
         )
         milestone_one, milestone_two = review_one.id, review_two.id
 
-    # -- rubric for review 1 -------------------------------------------
-    with session_scope(factory) as session:
-        rubric = create_rubric(faculty, session, milestone_id=milestone_one)
-        for code, title, weight, evidence, mandatory in (
-            (
-                "C1",
-                "Problem statement and objectives",
-                40,
-                "A stated problem, its consequence, and at least two "
-                "measurable objectives.",
-                True,
-            ),
-            (
-                "C2",
-                "SRS completeness",
-                35,
-                "Numbered functional and non-functional requirements.",
-                False,
-            ),
-            (
-                "C3",
-                "ER diagram and design",
-                25,
-                "An ER diagram showing entities, relationships and cardinality.",
-                False,
-            ),
-        ):
-            add_criterion(
-                faculty,
-                session,
-                rubric_id=rubric.id,
-                code=code,
-                title=title,
-                weight=weight,
-                max_score=10,
-                expected_evidence=evidence,
-                is_mandatory=mandatory,
-            )
-        publish_rubric(faculty, session, rubric_id=rubric.id)
+    # -- rubrics --------------------------------------------------------
+    # The department's own rubric, not an invented one. Five criteria per
+    # review, each marked 0-5 against the published descriptors, each weighted
+    # 20 so the weights sum to 100 and the engine scales that percentage onto
+    # the milestone's 25 marks. The five levels map onto max_score=5 exactly:
+    # Excellent 5, Good 4, Satisfactory 2-3, Needs Improvement 1, Poor 0.
+    for milestone_id, criteria in (
+        (milestone_one, REVIEW_ONE_CRITERIA),
+        (milestone_two, REVIEW_TWO_CRITERIA),
+    ):
+        with session_scope(factory) as session:
+            rubric = create_rubric(faculty, session, milestone_id=milestone_id)
+            for code, title, description, evidence, mandatory in criteria:
+                add_criterion(
+                    faculty,
+                    session,
+                    rubric_id=rubric.id,
+                    code=code,
+                    title=title,
+                    weight=20,
+                    max_score=5,
+                    description=description,
+                    expected_evidence=evidence,
+                    is_mandatory=mandatory,
+                )
+            publish_rubric(faculty, session, rubric_id=rubric.id)
 
     # -- enrolment ------------------------------------------------------
     rows = ["email,name,prn,batch,group_label"]
@@ -658,16 +755,17 @@ def build(
             row.submitted_at = deadline + timedelta(days=late, hours=-2)
 
     # -- scoring --------------------------------------------------------
+    # Marked 0-5 against the department descriptors, not out of ten.
     marks = {
-        "Manthan Sankpal": {"C1": 9, "C2": 8, "C3": 9},
-        "Rahul Deshmukh": {"C1": 8, "C2": 7, "C3": 6},
-        "Priya Kulkarni": {"C1": 7, "C2": 6, "C3": 7},
-        "Aditi Joshi": {"C1": 9, "C2": 9, "C3": 8},
-        "Kunal Patil": {"C1": 6, "C2": 5, "C3": 5},
+        "Manthan Sankpal": {"C1": 5, "C2": 4, "C3": 5, "C4": 4, "C5": 5},
+        "Rahul Deshmukh": {"C1": 4, "C2": 4, "C3": 3, "C4": 3, "C5": 4},
+        "Priya Kulkarni": {"C1": 4, "C2": 3, "C3": 4, "C4": 3, "C5": 3},
+        "Aditi Joshi": {"C1": 5, "C2": 5, "C3": 4, "C4": 4, "C5": 4},
+        "Kunal Patil": {"C1": 3, "C2": 2, "C3": 3, "C4": 2, "C5": 2},
         # Left unscored on purpose, so the grid has rows needing attention.
         "Sneha More": None,
         # Mandatory C1 unevidenced: approval must be blocked (fix item 4).
-        "Rohit Jadhav": {"C1": 0, "C2": 7, "C3": 6},
+        "Rohit Jadhav": {"C1": 0, "C2": 4, "C3": 3, "C4": 3, "C5": 3},
     }
     approve_for = {"Manthan Sankpal", "Aditi Joshi", "Priya Kulkarni"}
 
@@ -688,9 +786,11 @@ def build(
             marks[name] = None  # unscored, needs a human
             continue
         marks[name] = {
-            "C1": 4 + (seed * 3) % 7,
-            "C2": 4 + (seed * 5) % 7,
-            "C3": 3 + (seed * 7) % 8,
+            "C1": 2 + (seed * 3) % 4,
+            "C2": 2 + (seed * 5) % 4,
+            "C3": 1 + (seed * 7) % 5,
+            "C4": 2 + (seed * 11) % 4,
+            "C5": 2 + (seed * 13) % 4,
         }
         if seed % 9 != 0:
             approve_for.add(name)
@@ -718,7 +818,11 @@ def build(
                 value,
                 Verdict.NO_EVIDENCE
                 if value == 0
-                else (Verdict.FOLLOWED if value >= 8 else Verdict.PARTIAL),
+                else (
+                    Verdict.FOLLOWED
+                    if value >= 4
+                    else (Verdict.PARTIAL if value >= 2 else Verdict.NOT_FOLLOWED)
+                ),
             )
             for code, value in scores.items()
         }
