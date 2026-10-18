@@ -594,13 +594,17 @@ def build(
         days=10
     )
 
+    # Titles carry no "Review N" prefix: `index` is that, and every page
+    # renders "Review {index} — {title}". The department's own document
+    # writes the prefix into the heading, which is how it got duplicated here
+    # the first time.
     with session_scope(factory) as session:
         review_one = create_milestone(
             faculty,
             session,
             cycle_id=cycle_id,
             index=1,
-            title="Review 1 — Project Introduction & Synopsis Submission",
+            title="Project Introduction & Synopsis Submission",
             description=(
                 "Submit the synopsis, the SRS and an ER diagram as a single PDF "
                 "or DOCX. The rubric below is what you will be marked against."
@@ -619,7 +623,7 @@ def build(
             session,
             cycle_id=cycle_id,
             index=2,
-            title="Review 2 — Implementation, Demo & Final Submission",
+            title="Implementation, Demo & Final Submission",
             description=(
                 "A working system, its source, the documentation set and a live "
                 "demonstration. Marked against the five criteria below."
@@ -627,7 +631,13 @@ def build(
             public_notes="Bring a laptop that can run the system offline.",
             due_at=deadline + timedelta(days=45),
             max_marks=25,
-            is_visible=False,  # still a draft, so the grid shows both states
+            # Visible and still open, so a student has something to submit to.
+            # Review 1 closed ten days ago and demonstrates the whole marking
+            # loop; this one demonstrates the half that comes first — the
+            # rubric read before uploading, and the lateness consequence shown
+            # before confirming. With both reviews shut there is no way to
+            # show either, which is the entire thesis of the system.
+            is_visible=True,
         )
         milestone_one, milestone_two = review_one.id, review_two.id
 

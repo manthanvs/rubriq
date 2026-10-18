@@ -12,6 +12,9 @@ someone has to remember to update.
 
 from __future__ import annotations
 
+import inspect
+import re
+
 import scripts.seed_demo as seed
 from core.db.models import Base
 
@@ -78,3 +81,20 @@ def test_the_order_names_real_tables() -> None:
     unknown = [name for name in reset_order() if name not in Base.metadata.tables]
 
     assert not unknown, f"reset() names tables that no longer exist: {unknown}"
+
+
+def test_seeded_milestone_titles_do_not_repeat_their_index() -> None:
+    """Every page renders "Review {index} — {title}".
+
+    A title beginning "Review 1 —" therefore reads "Review 1 — Review 1 — …"
+    in six dropdowns at once. The department's own rubric writes the prefix
+    into its headings, which is exactly how it got copied into the title here.
+    """
+    from scripts.seed_demo import build
+
+    source = inspect.getsource(build)
+    titles = re.findall(r'title="([^"]+)"', source)
+    assert titles, "no milestone titles found in the seed"
+
+    repeated = [t for t in titles if re.match(r"(?i)^review\s*\d", t)]
+    assert not repeated, f"titles repeat their index: {repeated}"
