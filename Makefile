@@ -27,6 +27,7 @@ help:
 	@echo "reseed    - wipe and rebuild the demo dataset"
 	@echo "synopsis  - build docs/report/RubriQ_Synopsis.docx"
 	@echo "report    - build docs/report/RubriQ_Report.docx"
+	@echo "viva      - build docs/report/RubriQ_Viva_Script.docx"
 
 install:
 	$(PIP) install -r requirements.txt
@@ -68,6 +69,12 @@ reseed:
 # The .docx is generated, never hand-edited: docs/synopsis.md is the source.
 synopsis:
 	$(PY) scripts/build_synopsis_docx.py
+
+# Likewise, from docs/viva-script.md. A script you hold while talking has to
+# print, but a second hand-kept copy is how two versions of the same
+# instructions disagree on the morning you need them.
+viva:
+	$(PY) scripts/build_viva_script_docx.py
 
 # Assembled from docs/; the .docx is generated, never hand-edited.
 report:
