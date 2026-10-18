@@ -264,21 +264,33 @@ stay true.
 
 ## 8. Demonstration script
 
-The order that shows the most in the least time.
+The order that shows the most in the least time. Twelve steps, roughly fifteen
+minutes without questions.
+
+**Reseed on the day.** The seeded deadline is ten days before whenever the seed
+runs, so a database built a fortnight ago shows a review that closed three
+weeks back and lateness that reads as ancient history. `make reseed` resets it.
+On the hosted copy, a reboot does the same thing — the filesystem is ephemeral,
+so it rebuilds from nothing.
 
 | Step | Do | Shows |
 |---|---|---|
 | 1 | `make reseed && make run` | Setup cost is one command |
-| 2 | Faculty Dashboard | Owned subjects, needs-attention count, waiting question |
-| 3 | Rubric Builder — try to edit the published rubric | Immutability; the clone-to-v2 path |
-| 4 | Review Grid | The centrepiece: verdicts, penalties, `ABSENT` as a status, a non-submitter with a row |
-| 5 | Open a row's drawer | Evidence span, rationale, override-with-reason, approval blocked on an unevidenced mandatory criterion |
-| 6 | "Approve all eligible" | The excluded count and its reason, *before* confirming |
-| 7 | Download the `.xlsx`, open it | A real spreadsheet with the same numbers as the screen |
-| 8 | Reports | Distribution, weakest criterion, absence excluded from the mean |
-| 9 | Sign in as a student | Rubric before upload, lateness consequence, feedback gated on approval |
-| 10 | Ask RubriQ an out-of-scope question | Escalation instead of invention |
-| 11 | Activity | Who changed what, when, and why |
+| 2 | Faculty Dashboard | 67 students, the review picker, and "Waiting on you" as links rather than notices — the count and the page that resolves it are one click |
+| 3 | Rubric Builder — open the published rubric | The department's own five criteria, each carrying its full descriptor scale. Try to edit it: immutability, and the clone-to-v2 path |
+| 4 | Review Grid | The centrepiece: five criterion columns, verdicts, penalties, `ABSENT` as a status not a zero, a non-submitter keeping a row |
+| 5 | Open your own row's drawer | RubriQ assessed against the rubric it is marked by — 23/25, with the two held-back marks explained in the note |
+| 6 | Open a different row's drawer | Evidence span, rationale, override-with-reason, approval blocked on an unevidenced mandatory criterion |
+| 7 | "Approve all eligible" | The excluded count and its reason, *before* confirming |
+| 8 | Download the `.xlsx`, open it | A real spreadsheet with the same numbers as the screen |
+| 9 | Reports | Distribution, the department's grading scale applied to the cohort, weakest criterion, absence excluded from the mean |
+| 10 | Sign in as a student | Rubric before upload, lateness consequence stated before confirming, feedback gated on approval |
+| 11 | Ask RubriQ an out-of-scope question | Escalation instead of invention |
+| 12 | Activity | Who changed what, when, and why |
+
+**If asked for one thing, show step 4 then step 6.** The grid is the
+requirement and the drawer is the invariant — everything else is context for
+those two.
 
 If the network is unavailable, steps 1–11 all still work. Only a live AI
 evaluation would not, and its absence is itself a demonstration of
