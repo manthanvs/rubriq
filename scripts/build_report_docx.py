@@ -36,11 +36,8 @@ from docx.shared import Inches, Pt  # noqa: E402
 from scripts.build_synopsis_docx import (  # noqa: E402
     BODY_PT,
     FONT,
-    GUIDE,
-    INSTITUTE,
     PRN,
     STUDENT_NAME,
-    YEAR,
     bullet,
     centred,
     heading,
@@ -68,6 +65,12 @@ REPORT_DIR = REPO_ROOT / "docs" / "report"
 
 TITLE = "RubriQ – AI-Assisted Project Review & Rubric Evaluation System for PCCOE Mentors"
 
+#: The parenthetical line under the title, as the department's reports carry.
+SUBTITLE = (
+    "(A Rubric-First Evaluation System with Evidence-Backed AI Scoring "
+    "and Faculty Approval)"
+)
+
 TESTS_TOTAL = 698
 
 #: Shown on the title page and in §1.3. Private at the time of writing; make
@@ -75,21 +78,42 @@ TESTS_TOTAL = 698
 #: for whoever reads it.
 REPO_URL = "https://github.com/manthanvs/rubriq"
 
+#: Worded to match the department's own certificates. The formula that
+#: matters is "a record of bonafide work carried out under the supervision
+#: and guidance of ... in partial fulfilment of the requirement for MCA course
+#: of Savitribai Phule Pune University" — check it against the current
+#: template before printing, because this is the page every institute words
+#: its own way.
+GUIDE_PLAIN = "Prof. Dr. Anjana Arakerimath"
+GUIDE_ROLE = "Seminar Guide and Head of the Department, MCA"
+DIRECTOR = "Dr. G. N. Kulkarni"
+
 CERTIFICATE = (
-    f"This is to certify that the Mini Project entitled “{TITLE}” has been "
-    f"carried out by {STUDENT_NAME} (PRN {PRN}) in partial fulfilment of the "
-    "requirements for the award of the degree of Master of Computer "
-    "Applications, Semester III, during the academic year 2026–27."
+    f"This is to certify that the project report entitled “{TITLE}” being "
+    f"submitted by {STUDENT_NAME} ({PRN}) is a record of bonafide work "
+    f"carried out by him under the supervision and guidance of {GUIDE_PLAIN} "
+    "in partial fulfilment of the requirement for MCA course of Savitribai "
+    "Phule Pune University, Pune in the academic year 2026-27."
 )
 
+#: The guide and the Head of Department are the same person for this
+#: project, so the two signature blocks a report normally carries collapse
+#: into one. DIRECTOR is named in the acknowledgement as the department's
+#: reports do — verify the incumbent before printing.
+
 ACKNOWLEDGEMENT = [
-    "I would like to thank my guide, Prof. Dr. Anjana Arakerimath, Head of the "
-    "Department of MCA, for her guidance throughout this project, and for the "
-    "discussions that shaped what the system does and, just as usefully, what "
-    "it deliberately does not do.",
-    "I am grateful to the Department of MCA at Pimpri Chinchwad College of "
-    "Engineering for providing the environment and the facilities that made "
-    "this work possible.",
+    f"I express my deepest gratitude to my guide, {GUIDE_PLAIN}, Head of the "
+    "Department of Master of Computer Application, for her valuable guidance, "
+    "constant encouragement and critical feedback throughout this project. "
+    "Her advice shaped what the system does and, just as usefully, what it "
+    "deliberately does not do.",
+    f"I am profoundly grateful to {DIRECTOR}, the Director, and to the "
+    "management of Pimpri Chinchwad College of Engineering, for providing the "
+    "infrastructure, computational resources and academic environment in "
+    "which to carry out this work.",
+    "Finally, I would like to thank my family, my peers and the faculty of "
+    "the department for their support and for the discussions that improved "
+    "this project along the way.",
 ]
 
 ABSTRACT = [
@@ -120,13 +144,14 @@ ABSTRACT = [
 CHAPTERS = [
     "1. Introduction",
     "2. Problem Statement and Existing System",
-    "3. Requirement Analysis",
-    "4. System Design",
-    "5. Implementation",
-    "6. Testing",
-    "7. Results",
-    "8. Conclusion and Future Scope",
-    "References",
+    "3. Scope of Proposed System",
+    "4. Requirement Analysis",
+    "5. System Architecture and Methodology",
+    "6. Implementation",
+    "7. Testing",
+    "8. Results",
+    "9. Conclusion and Future Scope",
+    "10. References",
 ]
 
 # -- 1. Introduction ------------------------------------------------------
@@ -356,6 +381,103 @@ HARDWARE = (
     "An internet connection is needed for sign-in and for AI evaluation; every "
     "other feature works without one."
 )
+
+# -- 3. Scope -------------------------------------------------------------
+
+SCOPE_IN = [
+    "Faculty author a rubric for each review, with weighted criteria, maximum "
+    "scores and the evidence each criterion expects, and publish it so that it "
+    "freezes; editing a published rubric produces a new version and leaves the "
+    "old one intact for work already marked against it.",
+    "Students read the published rubric before uploading, submit PDF, DOCX or "
+    "text files and optionally a repository link, and see what submitting late "
+    "will cost before they confirm. Every re-upload is a new version and the "
+    "earlier ones remain retrievable.",
+    "The system extracts the text of a submission at upload and produces a "
+    "suggested score for each rubric criterion, together with a line quoted "
+    "from the submission as evidence and a one-sentence reason.",
+    "Faculty review those suggestions in a grid, override any of them with a "
+    "recorded reason, and approve. Nothing is a mark until a named faculty "
+    "member has approved it, and approval is blocked while a mandatory "
+    "criterion has no evidence behind it.",
+    "Late penalties and absence are applied from a configurable rule table "
+    "computed in program code, and results export to Excel and to a pasteable "
+    "form carrying the same numbers as the screen.",
+    "Project groups exist where a faculty member has granted them, and a "
+    "member of a granted group may be marked apart from it with a recorded "
+    "reason. Students may ask questions scoped to one review, which are "
+    "answered from the rubric or escalated to the guide unanswered.",
+]
+
+SCOPE_OUT = [
+    "Plagiarism detection, and any comparison of one submission against "
+    "another or against external sources.",
+    "Executing, compiling or testing submitted code. A repository link is "
+    "recorded and shown but never fetched, so nothing is judged that the "
+    "system has not read.",
+    "A mobile application, and integration with any learning-management "
+    "system or university portal.",
+    "Multiple institutions in one deployment. The system assumes a single "
+    "institute and a single email domain.",
+    "Real-time collaborative editing of a rubric or a score sheet by two "
+    "people at once.",
+    "Production hosting of real student data, which is a decision for the "
+    "institution rather than for this project.",
+]
+
+SCOPE_NOTE = (
+    "Each exclusion above is a decision rather than an omission, and each is "
+    "recorded with its reason in the project's design notes. The repository "
+    "link is the clearest example: fetching a repository would require a "
+    "network connection at upload time and would invite the system to judge "
+    "code it had never read, which the evidence check could not then verify a "
+    "quotation against."
+)
+
+HARDWARE_TABLE = [
+    ("Processor", "Any dual-core processor; developed on an x86-64 laptop"),
+    ("Memory", "8 GB RAM is sufficient"),
+    ("Storage", "500 MB for the application, its database and uploaded files"),
+    ("Display", "1366 × 768 or larger; the review grid is a wide table"),
+    (
+        "Network",
+        "Needed for Google sign-in and for AI evaluation only. Every other "
+        "feature works offline",
+    ),
+    ("Server", "None. The database is a file and the application is one process"),
+]
+
+FEASIBILITY = [
+    (
+        "Technical",
+        "The system is built from a single language and a small set of "
+        "well-supported libraries, and runs as one process against a file-based "
+        "database. There is no server to provision and no service to keep "
+        "running, so it can be demonstrated on whichever machine is available.",
+    ),
+    (
+        "Economic",
+        "Every component is open source or has a free tier. The only running "
+        "cost is the language-model provider, and the system is designed to "
+        "work without one: with no key configured, AI evaluation reports that "
+        "it is unavailable and manual scoring, penalties, approval and the "
+        "exports are unaffected.",
+    ),
+    (
+        "Operational",
+        "The people who would use it already work this way — a guide writes a "
+        "rubric and marks against it, and a student submits against it. The "
+        "system changes the order in which those happen rather than asking "
+        "anyone to adopt a new process.",
+    ),
+    (
+        "Schedule",
+        "The work was divided into phases, each with its own exit condition, "
+        "and the deterministic half was completed before the AI half began. "
+        "That ordering meant a working, demonstrable system existed well "
+        "before the more uncertain component was attempted.",
+    ),
+]
 
 # -- 4. Design ------------------------------------------------------------
 DESIGN_USE_CASES = [
@@ -943,16 +1065,31 @@ def build(out_path: Path) -> Path:
 
     # ---- title page ----------------------------------------------------
     document.add_paragraph()
-    centred(document, "A Mini Project Report on", size=14, space_after=24)
-    centred(document, TITLE, size=19, bold=True, space_after=30)
-    centred(document, "Submitted by", size=13, space_after=10)
-    centred(document, STUDENT_NAME, size=16, bold=True, space_after=4)
-    centred(document, f"({PRN})", size=13, space_after=26)
-    centred(document, "Under the guidance of", size=13, space_after=10)
-    centred(document, GUIDE, size=15, space_after=40)
-    centred(document, "DEPARTMENT OF MCA", size=15, bold=True, space_after=8)
-    centred(document, INSTITUTE, size=12, bold=True, space_after=16)
-    centred(document, YEAR, size=13, space_after=16)
+    centred(document, "Mini Project Report", size=16, bold=True, space_after=18)
+    centred(document, TITLE, size=19, bold=True, space_after=10)
+    centred(document, SUBTITLE, size=12, space_after=30)
+    centred(document, "Submitted By", size=13, space_after=10)
+    centred(document, f"Mr. {STUDENT_NAME}", size=16, bold=True, space_after=4)
+    centred(document, f"PRN No: {PRN}", size=13, space_after=26)
+    centred(document, "Under the Guidance of", size=13, space_after=8)
+    centred(document, GUIDE_PLAIN, size=15, bold=True, space_after=4)
+    centred(document, GUIDE_ROLE, size=12, space_after=34)
+    centred(
+        document,
+        "Department of Master of Computer Application",
+        size=14,
+        bold=True,
+        space_after=6,
+    )
+    centred(document, "Pimpri Chinchwad Education Trust's", size=12, space_after=4)
+    centred(
+        document,
+        "Pimpri Chinchwad College of Engineering",
+        size=13,
+        bold=True,
+        space_after=18,
+    )
+    centred(document, "ACADEMIC YEAR 2026-2027", size=13, bold=True, space_after=16)
     centred(document, f"Source code: {REPO_URL}", size=11, space_after=0)
     page_break(document)
 
@@ -968,14 +1105,29 @@ def build(out_path: Path) -> Path:
         document,
         "The work is original and has been carried out under my supervision.",
     )
-    for _ in range(3):
+    document.add_paragraph()
+
+    for label in ("Date:", "Place:"):
+        line = document.add_paragraph()
+        line.paragraph_format.line_spacing = 1.0
+        line.paragraph_format.space_after = Pt(2)
+        run = line.add_run(label)
+        run.font.name = FONT
+        run.font.size = Pt(BODY_PT)
+
+    for _ in range(4):
         document.add_paragraph()
-    row = document.add_paragraph()
-    row.paragraph_format.line_spacing = 1.0
-    run = row.add_run("Guide\t\t\t\t\t\tHead of the Department")
-    run.font.name = FONT
-    run.font.size = Pt(BODY_PT)
-    run.bold = True
+
+    # One signature block, not two: the guide is also the Head of Department.
+    for text, bold in ((GUIDE_PLAIN, True), (f"({GUIDE_ROLE})", False)):
+        line = document.add_paragraph()
+        line.paragraph_format.line_spacing = 1.0
+        line.paragraph_format.space_after = Pt(2)
+        run = line.add_run(text)
+        run.font.name = FONT
+        run.font.size = Pt(BODY_PT)
+        run.bold = bold
+
     page_break(document)
 
     # ---- acknowledgement -----------------------------------------------
@@ -998,7 +1150,7 @@ def build(out_path: Path) -> Path:
     page_break(document)
 
     # ---- contents ------------------------------------------------------
-    centred(document, "CONTENTS", size=16, bold=True, space_after=18)
+    centred(document, "INDEX", size=16, bold=True, space_after=18)
     table_of_contents(document, CHAPTERS)
     page_break(document)
 
@@ -1025,14 +1177,14 @@ def build(out_path: Path) -> Path:
 
     # ---- 2. Problem statement ------------------------------------------
     heading(document, "2. Problem Statement and Existing System")
-    heading(document, "2.1 The existing system", level=2)
+    heading(document, "2.1 Working of the existing system", level=2)
     for text in EXISTING:
         para(document, text)
     para(document, "Its difficulties are:")
     for text in EXISTING_PROBLEMS:
         bullet(document, text)
 
-    heading(document, "2.2 Need for the proposed system", level=2)
+    heading(document, "2.2 Need for the new system", level=2)
     for text in NEED:
         para(document, text)
 
@@ -1040,9 +1192,28 @@ def build(out_path: Path) -> Path:
     for text in RELATED:
         para(document, text)
 
-    # ---- 3. Requirement analysis ----------------------------------------
-    heading(document, "3. Requirement Analysis")
-    heading(document, "3.1 Functional requirements", level=2)
+    # ---- 3. Scope --------------------------------------------------------
+    heading(document, "3. Scope of Proposed System")
+    para(
+        document,
+        "The scope below is stated in both directions. What a system "
+        "deliberately does not do is as much a part of its specification as "
+        "what it does, and an exclusion that is written down is a decision "
+        "rather than a gap discovered later.",
+    )
+
+    heading(document, "3.1 Within scope", level=2)
+    for text in SCOPE_IN:
+        bullet(document, text)
+
+    heading(document, "3.2 Outside scope", level=2)
+    for text in SCOPE_OUT:
+        bullet(document, text)
+    para(document, SCOPE_NOTE)
+
+    # ---- 4. Requirement analysis ----------------------------------------
+    heading(document, "4. Requirement Analysis")
+    heading(document, "4.1 Functional requirements", level=2)
     para(
         document,
         "The requirements are summarised by area below. The full numbered list "
@@ -1054,45 +1225,60 @@ def build(out_path: Path) -> Path:
         document, FUNCTIONAL, headers=("Area", "Requirement"), widths=(1.5, 4.4)
     )
 
-    heading(document, "3.2 Non-functional requirements", level=2)
+    heading(document, "4.2 Non-functional requirements", level=2)
     two_column_table(
         document, NON_FUNCTIONAL, headers=("Quality", "Requirement"), widths=(1.4, 4.5)
     )
 
-    heading(document, "3.3 Software requirements", level=2)
+    heading(document, "4.3 Software requirements", level=2)
     two_column_table(
         document, SOFTWARE, headers=("Item", "Software used"), widths=(1.8, 4.1)
     )
+
+    heading(document, "4.4 Hardware requirements", level=2)
     para(document, HARDWARE)
+    two_column_table(
+        document, HARDWARE_TABLE, headers=("Item", "Requirement"), widths=(1.5, 4.4)
+    )
+
+    heading(document, "4.5 Feasibility and design considerations", level=2)
+    para(
+        document,
+        "The project was assessed for feasibility along four dimensions before "
+        "the design was settled.",
+    )
+    two_column_table(
+        document, FEASIBILITY, headers=("Dimension", "Assessment"), widths=(1.3, 4.6)
+    )
 
     # ---- 4. Design -------------------------------------------------------
-    heading(document, "4. System Design")
-    heading(document, "4.1 Architecture", level=2)
+    heading(document, "5. System Architecture and Methodology")
+    heading(document, "5.1 Architecture", level=2)
     for text in DESIGN_PRINCIPLE:
         para(document, text)
-    figure(document, architecture, "Fig. 4.1 — System architecture")
+    figure(document, architecture, "Fig. 5.1 — System architecture")
 
-    heading(document, "4.2 Use cases", level=2)
+    heading(document, "5.2 Use cases", level=2)
     for text in DESIGN_USE_CASES:
         para(document, text)
-    figure(document, figures["use-case"], "Fig. 4.2 — Use-case diagram", width=5.1)
+    figure(document, figures["use-case"], "Fig. 5.2 — Use-case diagram", width=5.1)
 
-    heading(document, "4.3 Data flow", level=2)
+    heading(document, "5.3 Data flow", level=2)
     for text in DESIGN_DATA_FLOW:
         para(document, text)
     figure(
         document,
         figures["dfd-l0"],
-        "Fig. 4.3 — Data flow diagram, level 0 (context)",
+        "Fig. 5.3 — Data flow diagram, level 0 (context)",
     )
     figure(
         document,
         figures["dfd-l1"],
-        "Fig. 4.4 — Data flow diagram, level 1",
+        "Fig. 5.4 — Data flow diagram, level 1",
         width=5.2,
     )
 
-    heading(document, "4.4 Data model", level=2)
+    heading(document, "5.4 Data model", level=2)
     para(
         document,
         "The database holds twenty tables. Three properties of the model carry "
@@ -1105,12 +1291,12 @@ def build(out_path: Path) -> Path:
         "page is drawn, which is what makes “what has the student followed, "
         "and what have they not” answerable.",
     )
-    figure(document, er, "Fig. 4.5 — Entity–relationship overview", width=5.9)
+    figure(document, er, "Fig. 5.5 — Entity–relationship overview", width=5.9)
 
-    heading(document, "4.5 Flow of work", level=2)
-    figure(document, flow, "Fig. 4.6 — Flow of work in RubriQ", width=5.4)
+    heading(document, "5.5 Flow of work", level=2)
+    figure(document, flow, "Fig. 5.6 — Flow of work in RubriQ", width=5.4)
 
-    heading(document, "4.6 Scoring", level=2)
+    heading(document, "5.6 Scoring", level=2)
     for text in DESIGN_SCORING:
         para(document, text)
     para(document, "The late-submission policy is as follows:")
@@ -1118,28 +1304,28 @@ def build(out_path: Path) -> Path:
         document, LATE_TABLE, headers=("Days late", "Outcome"), widths=(1.3, 4.6)
     )
 
-    heading(document, "4.7 The AI layer", level=2)
+    heading(document, "5.7 The AI layer", level=2)
     for text in DESIGN_AI:
         para(document, text)
     figure(
         document,
         figures["eval-state"],
-        "Fig. 4.7 — Evaluation state machine, with both failure loops",
+        "Fig. 5.7 — Evaluation state machine, with both failure loops",
         width=5.6,
     )
 
-    heading(document, "4.8 The evidence guard", level=2)
+    heading(document, "5.8 The evidence guard", level=2)
     for text in DESIGN_GUARD:
         para(document, text)
 
     # ---- 5. Implementation ----------------------------------------------
-    heading(document, "5. Implementation")
-    heading(document, "5.1 Module structure", level=2)
+    heading(document, "6. Implementation")
+    heading(document, "6.1 Module structure", level=2)
     two_column_table(
         document, MODULES, headers=("Module", "Responsibility"), widths=(1.4, 4.5)
     )
 
-    heading(document, "5.2 Implementation notes", level=2)
+    heading(document, "6.2 Implementation notes", level=2)
     para(
         document,
         "Four decisions are worth recording, because each was made in response "
@@ -1149,8 +1335,8 @@ def build(out_path: Path) -> Path:
         para(document, text, lead=lead)
 
     # ---- 6. Testing ------------------------------------------------------
-    heading(document, "6. Testing")
-    heading(document, "6.1 Automated tests", level=2)
+    heading(document, "7. Testing")
+    heading(document, "7.1 Automated tests", level=2)
     para(
         document,
         f"The project has {TESTS_TOTAL} automated tests, all passing. They are "
@@ -1164,7 +1350,7 @@ def build(out_path: Path) -> Path:
         widths=(1.5, 0.7, 3.7),
     )
 
-    heading(document, "6.2 Tests that protect the design", level=2)
+    heading(document, "7.2 Tests that protect the design", level=2)
     para(
         document,
         "Three tests check the structure of the project rather than its "
@@ -1173,7 +1359,7 @@ def build(out_path: Path) -> Path:
     for text in ARCHITECTURE_TESTS:
         bullet(document, text)
 
-    heading(document, "6.3 Defects found and corrected", level=2)
+    heading(document, "7.3 Defects found and corrected", level=2)
     para(
         document,
         "The following defects were found during development and are recorded "
@@ -1188,35 +1374,35 @@ def build(out_path: Path) -> Path:
     )
 
     # ---- 7. Results ------------------------------------------------------
-    heading(document, "7. Results")
+    heading(document, "8. Results")
     for text in RESULTS:
         para(document, text)
     two_column_table(
         document, RESULT_TABLE, headers=("Result", "Observation"), widths=(1.6, 4.3)
     )
 
-    heading(document, "7.1 A result not obtained", level=2)
+    heading(document, "8.1 A result not obtained", level=2)
     for text in RESULTS_HONEST:
         para(document, text)
 
     # ---- 8. Conclusion ---------------------------------------------------
-    heading(document, "8. Conclusion and Future Scope")
-    heading(document, "8.1 Conclusion", level=2)
+    heading(document, "9. Conclusion and Future Scope")
+    heading(document, "9.1 Conclusion", level=2)
     for text in CONCLUSION:
         para(document, text)
 
-    heading(document, "8.2 Limitations", level=2)
+    heading(document, "9.2 Limitations", level=2)
     two_column_table(
         document, LIMITATIONS, headers=("Limitation", "Detail"), widths=(1.7, 4.2)
     )
 
-    heading(document, "8.3 Future scope", level=2)
+    heading(document, "9.3 Future scope", level=2)
     para(document, "In the order in which it would be worth doing:")
     for text in FUTURE:
         numbered(document, text)
 
     # ---- references ------------------------------------------------------
-    heading(document, "References")
+    heading(document, "10. References")
     for text in REFERENCES:
         numbered(document, text)
 
