@@ -33,6 +33,8 @@ from docx.enum.section import WD_SECTION  # noqa: E402
 from docx.enum.text import WD_ALIGN_PARAGRAPH  # noqa: E402
 from docx.shared import Inches, Pt  # noqa: E402
 
+from scripts.build_output_screens_docx import FIGURES as OUTPUT_SCREENS  # noqa: E402
+from scripts.build_output_screens_docx import find as find_screen  # noqa: E402
 from scripts.build_synopsis_docx import (  # noqa: E402
     BODY_PT,
     FONT,
@@ -1381,7 +1383,18 @@ def build(out_path: Path) -> Path:
         document, RESULT_TABLE, headers=("Result", "Observation"), widths=(1.6, 4.3)
     )
 
-    heading(document, "8.1 A result not obtained", level=2)
+    heading(document, "8.1 Output screens", level=2)
+    para(
+        document,
+        "The screens below are captured from the running system, in the order "
+        "in which it is used. Each is evidence of one stage of the flow "
+        "described in Chapter 5.",
+    )
+    for index, (name, _stage, title, note) in enumerate(OUTPUT_SCREENS, 1):
+        para(document, note, lead=f"{title}.")
+        figure(document, find_screen(name), f"Fig. 8.{index} — {title}", width=5.7)
+
+    heading(document, "8.2 A result not obtained", level=2)
     for text in RESULTS_HONEST:
         para(document, text)
 

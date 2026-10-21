@@ -41,10 +41,19 @@ from scripts.build_synopsis_docx import (  # noqa: E402
 SCREENS = REPO_ROOT / "docs" / "report" / "screens"
 DEFAULT_OUT = REPO_ROOT / "docs" / "report" / "RubriQ_Output_Screens.docx"
 
-#: (file, stage, title, what the screen is evidence of)
+#: Printed at 5.9 inches. Below this a capture is visibly soft on paper, so
+#: it is reported rather than quietly embedded — 300 dpi would be 1770 px and
+#: is the right target; 1200 is the point at which it stops looking sharp.
+MIN_WIDTH_PX = 1200
+
+#: Each figure is named without an extension. ``find`` takes the best file
+#: present, preferring PNG, so a screenshot recaptured at full resolution can
+#: simply be dropped in beside the old one without editing this list.
+#:
+#: (stem, stage, title, what the screen is evidence of)
 FIGURES: tuple[tuple[str, str, str, str], ...] = (
     (
-        "01-sign-in.jpg",
+        "01-sign-in",
         "Stage 1 — Signing in",
         "The authentication gate",
         "The only way into the system. Sign-in is through the institute's "
@@ -54,7 +63,7 @@ FIGURES: tuple[tuple[str, str, str, str], ...] = (
         "user cannot choose their own.",
     ),
     (
-        "02-faculty-dashboard.jpg",
+        "02-faculty-dashboard",
         "Stage 2 — Faculty dashboard",
         "What is waiting for the guide",
         "Sixty-seven enrolled students and eighty-five rows awaiting a "
@@ -63,7 +72,7 @@ FIGURES: tuple[tuple[str, str, str, str], ...] = (
         "forty-nine of sixty-seven approved for the selected review.",
     ),
     (
-        "03-rubric-builder.jpg",
+        "03-rubric-builder",
         "Stage 2 — Rubric builder",
         "The published rubric, frozen",
         "The department's five criteria with the evidence each expects, and "
@@ -73,7 +82,7 @@ FIGURES: tuple[tuple[str, str, str, str], ...] = (
         "version valid.",
     ),
     (
-        "04-student-dashboard.jpg",
+        "04-student-dashboard",
         "Stage 3 — Student dashboard",
         "The next deadline, and where each review stands",
         "The countdown answers the question the page is opened to ask. Below "
@@ -82,7 +91,7 @@ FIGURES: tuple[tuple[str, str, str, str], ...] = (
         "date.",
     ),
     (
-        "05-student-submit.jpg",
+        "05-student-submit",
         "Stage 3 — Student submission",
         "The rubric is shown before the upload box",
         "The central idea of the project, visible in one screen. “What you "
@@ -92,7 +101,7 @@ FIGURES: tuple[tuple[str, str, str, str], ...] = (
         "having passed before anything is confirmed.",
     ),
     (
-        "06-review-grid.jpg",
+        "06-review-grid",
         "Stage 5 — Review grid",
         "One row per student, one column per criterion",
         "The centrepiece. Sixty-seven rows, eighteen flagged as needing a "
@@ -102,7 +111,7 @@ FIGURES: tuple[tuple[str, str, str, str], ...] = (
         "from the list.",
     ),
     (
-        "07-reports.jpg",
+        "07-reports",
         "Stage 7 — Reports",
         "The cohort, and the department's grading scale",
         "The distribution of marks out of twenty-five, with absent students "
@@ -111,6 +120,38 @@ FIGURES: tuple[tuple[str, str, str, str], ...] = (
         "Needs Improvement, Poor — applied to this review's marks.",
     ),
 )
+
+
+#: PNG first: it is lossless, and a screenshot is flat colour and text, which
+#: is exactly what PNG keeps and JPEG smears.
+EXTENSIONS = (".png", ".PNG", ".jpg", ".jpeg", ".JPG")
+
+
+def find(stem: str) -> Path | None:
+    """The best file present for a figure, preferring a lossless one."""
+    for extension in EXTENSIONS:
+        candidate = SCREENS / f"{stem}{extension}"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def report_resolution() -> list[str]:
+    """Warn about captures that will print soft. Returns the complaints."""
+    from PIL import Image
+
+    soft = []
+    for stem, *_ in FIGURES:
+        path = find(stem)
+        if path is None:
+            continue
+        with Image.open(path) as image:
+            if image.width < MIN_WIDTH_PX:
+                soft.append(
+                    f"{path.name}: {image.width}x{image.height} "
+                    f"({image.width / 5.9:.0f} dpi at 5.9in)"
+                )
+    return soft
 
 
 def figure(document, path: Path, number: str, caption: str) -> None:
@@ -132,9 +173,12 @@ def figure(document, path: Path, number: str, caption: str) -> None:
 
 
 def build(out_path: Path = DEFAULT_OUT) -> Path:
-    missing = [name for name, *_ in FIGURES if not (SCREENS / name).is_file()]
+    missing = [stem for stem, *_ in FIGURES if find(stem) is None]
     if missing:
         raise SystemExit(f"missing screenshots: {missing}")
+
+    for complaint in report_resolution():
+        print(f"  low resolution — {complaint}", file=sys.stderr)
 
     document = Document()
     set_styles(document)
@@ -181,7 +225,7 @@ def build(out_path: Path = DEFAULT_OUT) -> Path:
         heading(document, f"{index}. {title}")
         para(document, stage)
         para(document, note)
-        figure(document, SCREENS / name, f"Fig. {index}", title)
+        figure(document, find(name), f"Fig. {index}", title)
         if index != len(FIGURES):
             page_break(document)
 
