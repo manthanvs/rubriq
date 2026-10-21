@@ -1,4 +1,8 @@
-"""Build a printable version of the viva script.
+"""Build a printable version of a presenting document.
+
+Defaults to the viva script; ``--source`` points it at another, such as
+``docs/program-flow.md``. Both are documents you hold while talking, and
+both are generated rather than kept as a second hand-edited copy.
 
 Generated *from* ``docs/viva-script.md`` rather than written again here. The
 script is a thing you hold while talking, so it has to print; but a second
@@ -100,12 +104,29 @@ def _plain(text: str) -> str:
     return text.replace("**", "").replace("*", "").strip()
 
 
+def _code_block(document, lines: list[str]) -> None:
+    """A fenced block, kept as drawn.
+
+    Diagrams made of text are the reason this exists: joining their lines the
+    way prose is joined turns an arrow diagram into a sentence.
+    """
+    for raw in lines:
+        paragraph = document.add_paragraph()
+        paragraph.paragraph_format.line_spacing = 1.0
+        paragraph.paragraph_format.space_after = Pt(0)
+        paragraph.paragraph_format.left_indent = Inches(0.2)
+        run = paragraph.add_run(raw)
+        run.font.name = "Consolas"
+        run.font.size = Pt(BODY_PT - 3)
+    document.add_paragraph()
+
+
 def _split_row(line: str) -> list[str]:
     return [c.strip() for c in line.strip().strip("|").split("|")]
 
 
-def build(out_path: Path = DEFAULT_OUT) -> Path:
-    lines = SOURCE.read_text(encoding="utf-8").splitlines()
+def build(out_path: Path = DEFAULT_OUT, source: Path = SOURCE) -> Path:
+    lines = source.read_text(encoding="utf-8").splitlines()
 
     document = Document()
     set_styles(document)
@@ -117,6 +138,8 @@ def build(out_path: Path = DEFAULT_OUT) -> Path:
     quote: list[str] = []
     table: list[list[str]] = []
     body: list[str] = []
+    body_is_item = False
+    code: list[str] | None = None
     first_section = True
 
     def flush() -> None:
@@ -127,10 +150,11 @@ def build(out_path: Path = DEFAULT_OUT) -> Path:
         is what made the first printed draft ragged, and it also split a bold
         span across two lines so its markers survived into the document.
         """
-        nonlocal quote, table, body
+        nonlocal quote, table, body, body_is_item
         if body:
-            _para(document, " ".join(body))
-            body = []
+            joined = " ".join(body)
+            _bullet(document, joined) if body_is_item else _para(document, joined)
+            body, body_is_item = [], False
         if quote:
             _quote(document, quote)
             quote = []
@@ -142,6 +166,18 @@ def build(out_path: Path = DEFAULT_OUT) -> Path:
 
     for raw in lines:
         line = raw.rstrip()
+
+        if line.startswith("```"):
+            if code is None:
+                flush()
+                code = []
+            else:
+                _code_block(document, code)
+                code = None
+            continue
+        if code is not None:
+            code.append(raw)
+            continue
 
         if line.startswith("> "):
             if body:
@@ -165,6 +201,9 @@ def build(out_path: Path = DEFAULT_OUT) -> Path:
             or re.match(r"^\d+\. ", line) is not None
         )
         if not structural:
+            # A wrapped continuation of whatever is open — a paragraph or a
+            # list item. Emitting it separately is what split a bold span
+            # across two paragraphs and left its markers showing.
             if quote or table:
                 flush()
             body.append(line)
@@ -190,9 +229,9 @@ def build(out_path: Path = DEFAULT_OUT) -> Path:
         elif line.startswith("### "):
             heading(document, _plain(line[4:]), level=2)
         elif line.startswith(("- ", "* ")):
-            _bullet(document, line[2:])
+            body, body_is_item = [line[2:]], True
         elif re.match(r"^\d+\. ", line):
-            _bullet(document, re.sub(r"^\d+\. ", "", line))
+            body, body_is_item = [re.sub(r"^\d+\. ", "", line)], True
         else:  # pragma: no cover - every line is classified above
             body.append(line)
 
@@ -206,8 +245,11 @@ def build(out_path: Path = DEFAULT_OUT) -> Path:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    parser.add_argument("--source", type=Path, default=SOURCE)
     args = parser.parse_args()
-    print(f"Wrote {build(args.out).relative_to(REPO_ROOT)}")
+    out = args.out if args.out.is_absolute() else REPO_ROOT / args.out
+    source = args.source if args.source.is_absolute() else REPO_ROOT / args.source
+    print(f"Wrote {build(out, source).relative_to(REPO_ROOT)}")
     return 0
 
 
