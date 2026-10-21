@@ -291,3 +291,27 @@ class TestGroupMemberMarks:
             "the mean counted the group's total for the adjusted member"
         )
         assert report.lowest == group_total - Decimal("4.00")
+
+
+def test_distribution_bands_sort_in_numeric_order() -> None:
+    """The chart sorts its axis as text, so the labels have to sort that way.
+
+    Unpadded, "5–10" sorts after "20–25" and the histogram reads
+    0–5, 10–15, 15–20, 20–25, 5–10 — which looks like a data error and is
+    only a formatting one.
+    """
+    from decimal import Decimal
+
+    from core.reports.service import _bands
+
+    marks = [Decimal(n) for n in (1, 7, 12, 18, 24)]
+    labels = [band.label for band in _bands(marks, Decimal(25))]
+
+    assert labels == sorted(labels), f"bands do not sort in order: {labels}"
+    assert [label.strip() for label in labels] == [
+        "0–5",
+        "5–10",
+        "10–15",
+        "15–20",
+        "20–25",
+    ]

@@ -28,6 +28,7 @@ help:
 	@echo "synopsis  - build docs/report/RubriQ_Synopsis.docx"
 	@echo "report    - build docs/report/RubriQ_Report.docx"
 	@echo "viva      - build docs/report/RubriQ_Viva_Script.docx"
+	@echo "screens   - build docs/report/RubriQ_Output_Screens.docx"
 
 install:
 	$(PIP) install -r requirements.txt
@@ -73,6 +74,9 @@ synopsis:
 # Likewise, from docs/viva-script.md. A script you hold while talking has to
 # print, but a second hand-kept copy is how two versions of the same
 # instructions disagree on the morning you need them.
+screens:
+	$(PY) scripts/build_output_screens_docx.py
+
 viva:
 	$(PY) scripts/build_viva_script_docx.py
 

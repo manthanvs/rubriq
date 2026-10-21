@@ -111,6 +111,7 @@ def _bands(
         return ()
 
     width = max_marks / buckets
+    width_chars = len(f"{max_marks:.0f}–{max_marks:.0f}")
     out: list[Band] = []
 
     for index in range(buckets):
@@ -124,7 +125,11 @@ def _bands(
         )
         out.append(
             Band(
-                label=f"{low:.0f}–{high:.0f}",
+                # Right-aligned so the labels sort in numeric order. The
+                # chart sorts its axis as text, and "5–10" sorts after
+                # "20–25" unless the widths match. A leading space sorts
+                # before any digit and is invisible on the axis.
+                label=f"{low:.0f}–{high:.0f}".rjust(width_chars),
                 low=low,
                 high=high,
                 count=count,

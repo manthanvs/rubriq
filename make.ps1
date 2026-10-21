@@ -69,6 +69,7 @@ switch ($Target) {
     'seed'     { Invoke-Py @('scripts/seed_demo.py') }
     'reseed'   { Invoke-Py @('scripts/seed_demo.py', '--reset') }
     'synopsis' { Invoke-Py @('scripts/build_synopsis_docx.py') }
+    'screens'  { Invoke-Py @('scripts/build_output_screens_docx.py') }
     'viva'     { Invoke-Py @('scripts/build_viva_script_docx.py') }
     'report'   { Invoke-Py @('-m', 'scripts.build_report_docx') }
 }
