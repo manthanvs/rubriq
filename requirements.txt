@@ -30,6 +30,10 @@ rapidfuzz>=3               # partial_ratio for the anti-hallucination guard
 # --- Dev ---
 pytest>=8                  # tests/core mirrors core/
 ruff>=0.6                  # lint + import order, one tool
+imageio>=2.34            # encodes docs/report/RubriQ_Walkthrough.mp4
+imageio-ffmpeg>=0.5      # ships the ffmpeg binary, so no system install is
+                         # needed to build the walkthrough. Both are used by
+                         # scripts/ only; neither is imported by core/ or app/
 Pillow>=10                 # scripts/*_diagram*.py draw the report figures. It
                            # arrives anyway as a pdfplumber dependency, which is
                            # exactly why it is declared here: a transitive
