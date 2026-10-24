@@ -73,7 +73,7 @@ SUBTITLE = (
     "and Faculty Approval)"
 )
 
-TESTS_TOTAL = 701
+TESTS_TOTAL = 717
 
 #: Shown on the title page and in §1.3. Private at the time of writing; make
 #: the repository public before handing the report in, or the link is dead

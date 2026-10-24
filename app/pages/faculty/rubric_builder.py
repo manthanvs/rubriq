@@ -17,7 +17,7 @@ from app.components.rubric_view import (
 from app.context import current_actor, db
 from app.state import after_mutation, flash, invalidate
 from core.academics.milestones import list_milestones
-from core.academics.subjects import list_subjects
+from core.academics.subjects import list_cycles, list_subjects
 from core.errors import RubriQError
 from core.rubrics.dto import RubricDTO
 from core.rubrics.service import (
@@ -30,6 +30,7 @@ from core.rubrics.service import (
     published_rubric_for,
     remove_criterion,
 )
+from core.rubrics.workbook import import_workbook, preview_workbook
 
 
 def render_draft_editor(draft: RubricDTO) -> None:
@@ -152,6 +153,96 @@ def render_published(published: RubricDTO) -> None:
 
 actor = current_actor()
 
+def render_workbook_import(subject) -> None:
+    """Upload the department's rubric spreadsheet instead of typing it in.
+
+    Collapsed by default: most visits are to an existing rubric, and a file
+    uploader open at the top of every one would be the loudest thing on a
+    page it is rarely the point of.
+    """
+    with st.expander("Import from the rubric spreadsheet", icon=":material/upload_file:"):
+        st.caption(
+            "Upload the department's .xlsx and every review in it becomes a "
+            "**draft** rubric — criteria, weights and the full descriptor "
+            "scale. Nothing is published: you review it here and publish "
+            "yourself."
+        )
+        upload = st.file_uploader(
+            "Rubric workbook",
+            type=["xlsx"],
+            key=f"rubric_workbook_{subject.id}",
+            label_visibility="collapsed",
+        )
+        if upload is None:
+            return
+
+        data = upload.getvalue()
+        try:
+            reviews = preview_workbook(data)
+        except RubriQError as exc:
+            st.error(str(exc), icon=":material/error:")
+            return
+
+        st.success(
+            f"Found {len(reviews)} review(s) and "
+            f"{sum(len(r.criteria) for r in reviews)} criteria.",
+            icon=":material/task_alt:",
+        )
+        for review in reviews:
+            st.markdown(
+                f"**Review {review.index} — {review.title}** "
+                f"· {review.max_marks:g} marks · {len(review.criteria)} criteria"
+            )
+            st.dataframe(
+                [
+                    {
+                        "Code": c.code,
+                        "Criterion": c.title,
+                        "Weight": float(c.weight),
+                        "Max": float(c.max_score),
+                    }
+                    for c in review.criteria
+                ],
+                hide_index=True,
+                width="stretch",
+            )
+
+        with db() as session:
+            cycles = list_cycles(actor, session, subject.id)
+        if not cycles:
+            st.warning(
+                "This subject has no project cycle yet — add one from "
+                "Subjects before importing.",
+                icon=":material/warning:",
+            )
+            return
+
+        if st.button(
+            "Import as drafts", type="primary", icon=":material/download:",
+            key=f"do_import_{subject.id}",
+        ):
+            try:
+                with db() as session:
+                    summary = import_workbook(
+                        actor,
+                        session,
+                        cycle_id=cycles[0].id,
+                        subject_id=subject.id,
+                        data=data,
+                    )
+            except RubriQError as exc:
+                st.error(str(exc), icon=":material/error:")
+                return
+
+            lines = "; ".join(
+                f"Review {r.index} ({r.note})" for r in summary.reviews
+            )
+            after_mutation(
+                f"Imported {summary.criteria_total} criteria — {lines}. "
+                "Review each draft below, then publish."
+            )
+
+
 st.title("Rubric Builder")
 
 
@@ -183,6 +274,8 @@ milestone = st.selectbox(
     options=milestones,
     format_func=lambda m: f"Review {m.index} — {m.title}",
 )
+
+render_workbook_import(subject)
 
 with db() as session:
     published = published_rubric_for(actor, session, milestone.id)
