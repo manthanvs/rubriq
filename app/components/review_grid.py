@@ -141,8 +141,12 @@ def grid_column_config(rubric, codes: tuple[str, ...]) -> dict:
             width=110, help="AI, MANUAL or OVERRIDDEN — where this mark came from."
         ),
     }
-    for code in codes:
+    # Numbered, not coded. The columns have to stay narrow or the totals
+    # scroll off the right (fix item 12), so the name lives in the tooltip
+    # and the legend -- but "1" reads as a position where "C1" reads as
+    # jargon a guide never chose.
+    for position, code in enumerate(codes, 1):
         config[code] = st.column_config.TextColumn(
-            code, width=52, help=titles.get(code, code)
+            str(position), width=52, help=titles.get(code, code)
         )
     return config

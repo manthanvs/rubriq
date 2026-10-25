@@ -14,11 +14,13 @@ from app.components.rubric_view import (
     render_version_badge,
     render_weight_status,
 )
-from app.context import current_actor, db
+from app.context import current_actor, db, get_settings
 from app.state import after_mutation, flash, invalidate
 from core.academics.milestones import list_milestones
 from core.academics.subjects import list_cycles, list_subjects
+from core.ai.provider import AIUnavailable, build_provider
 from core.errors import RubriQError
+from core.rubrics.document_import import ALLOWED_EXTENSIONS, read_rubric_document
 from core.rubrics.dto import RubricDTO
 from core.rubrics.service import (
     add_criterion,
@@ -30,7 +32,7 @@ from core.rubrics.service import (
     published_rubric_for,
     remove_criterion,
 )
-from core.rubrics.workbook import import_workbook, preview_workbook
+from core.rubrics.workbook import import_parsed
 
 
 def render_draft_editor(draft: RubricDTO) -> None:
@@ -62,9 +64,13 @@ def render_draft_editor(draft: RubricDTO) -> None:
     with st.form("add_criterion", clear_on_submit=True):
         st.write("**Add a criterion**")
 
-        left, right = st.columns(2)
-        code = left.text_input("Code", placeholder=f"C{len(draft.criteria) + 1}")
-        title = right.text_input("Title", placeholder="Problem statement and objectives")
+        # The code is generated, not asked for. It is an internal key that
+        # ties a score row to a criterion; a guide should be naming the thing
+        # she is marking, not inventing identifiers for it.
+        code = f"C{len(draft.criteria) + 1}"
+        title = st.text_input(
+            "Criterion", placeholder="Problem statement and objectives"
+        )
 
         weight_col, score_col, must_col = st.columns([2, 2, 1])
         weight = weight_col.number_input(
@@ -160,17 +166,17 @@ def render_workbook_import(subject) -> None:
     uploader open at the top of every one would be the loudest thing on a
     page it is rarely the point of.
     """
-    with st.expander("Import from the rubric spreadsheet", icon=":material/upload_file:"):
+    with st.expander("Import a rubric from a file", icon=":material/upload_file:"):
         st.caption(
-            "Upload the department's .xlsx and every review in it becomes a "
-            "**draft** rubric — criteria, weights and the full descriptor "
-            "scale. Nothing is published: you review it here and publish "
-            "yourself."
+            "Upload a rubric as a spreadsheet, Word file or PDF. Every review "
+            "in it becomes a **draft** — criteria, weights and the full "
+            "descriptor scale. Nothing is published: you check it here and "
+            "publish yourself."
         )
         upload = st.file_uploader(
-            "Rubric workbook",
-            type=["xlsx"],
-            key=f"rubric_workbook_{subject.id}",
+            "Rubric file",
+            type=[e.lstrip(".") for e in ALLOWED_EXTENSIONS],
+            key=f"rubric_doc_{subject.id}",
             label_visibility="collapsed",
         )
         if upload is None:
@@ -178,10 +184,20 @@ def render_workbook_import(subject) -> None:
 
         data = upload.getvalue()
         try:
-            reviews = preview_workbook(data)
+            provider = build_provider(get_settings())
+        except AIUnavailable:
+            provider = None  # a rubric spreadsheet still works without one
+
+        try:
+            with st.spinner("Reading the file…"):
+                reviews, how = read_rubric_document(
+                    upload.name, data, provider=provider
+                )
         except RubriQError as exc:
             st.error(str(exc), icon=":material/error:")
             return
+
+        st.caption(f"Source: {how}.")
 
         st.success(
             f"Found {len(reviews)} review(s) and "
@@ -196,7 +212,6 @@ def render_workbook_import(subject) -> None:
             st.dataframe(
                 [
                     {
-                        "Code": c.code,
                         "Criterion": c.title,
                         "Weight": float(c.weight),
                         "Max": float(c.max_score),
@@ -223,12 +238,12 @@ def render_workbook_import(subject) -> None:
         ):
             try:
                 with db() as session:
-                    summary = import_workbook(
+                    summary = import_parsed(
                         actor,
                         session,
                         cycle_id=cycles[0].id,
                         subject_id=subject.id,
-                        data=data,
+                        reviews=reviews,
                     )
             except RubriQError as exc:
                 st.error(str(exc), icon=":material/error:")

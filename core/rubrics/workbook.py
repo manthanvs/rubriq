@@ -92,12 +92,34 @@ def import_workbook(
     subject_id: int,
     data: bytes,
 ) -> ImportSummary:
-    """Create or update a draft rubric for every review in the workbook."""
+    """Create or update a draft rubric for every review in a workbook."""
+    return import_parsed(
+        actor,
+        session,
+        cycle_id=cycle_id,
+        subject_id=subject_id,
+        reviews=parse_rubric_workbook(data),
+    )
+
+
+def import_parsed(
+    actor: Actor,
+    session: Session,
+    *,
+    cycle_id: int,
+    subject_id: int,
+    reviews: tuple[ParsedReview, ...],
+) -> ImportSummary:
+    """Create or update a draft rubric for every review already parsed.
+
+    Separate from :func:`import_workbook` because a page previews what it
+    found before writing, and parsing the file a second time to import it
+    would risk importing something other than what was shown.
+    """
     require_faculty(actor, "import rubrics")
 
-    reviews = parse_rubric_workbook(data)
     if not reviews:
-        raise ValidationError("That workbook contains no reviews to import.")
+        raise ValidationError("There are no reviews to import.")
 
     existing = {
         milestone.index: milestone

@@ -142,7 +142,6 @@ if weakest is not None:
 st.dataframe(
     [
         {
-            "Code": c.code,
             "Criterion": c.title,
             "Out of": float(c.max_score),
             "Mean %": float(c.mean_percent),

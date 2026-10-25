@@ -37,7 +37,6 @@ def render_rubric(
     frame = pd.DataFrame(
         [
             {
-                "Code": c.code,
                 "Criterion": c.title,
                 "What is expected": c.expected_evidence or c.description or "—",
                 "Weight": float(c.weight),
@@ -56,7 +55,6 @@ def render_rubric(
         hide_index=True,
         width="stretch",
         column_config={
-            "Code": st.column_config.TextColumn(width="small"),
             "Criterion": st.column_config.TextColumn(width="medium"),
             "What is expected": st.column_config.TextColumn(width="large"),
             "Weight": st.column_config.NumberColumn(
