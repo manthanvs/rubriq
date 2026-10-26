@@ -19,6 +19,11 @@ from app.components.rubric_view import render_rubric, render_version_badge
 from app.context import current_actor, db, get_settings
 from app.state import after_mutation, flash, invalidate
 from core.academics.dto import MilestoneDTO
+from core.academics.enrollment import (
+    PROJECT_TITLE_MAX,
+    project_title_for,
+    set_project_title,
+)
 from core.academics.milestones import list_milestones
 from core.clock import ist_date, to_ist, utc_now
 from core.errors import RubriQError
@@ -143,6 +148,37 @@ def render_group_panel(milestone: MilestoneDTO):
     return None
 
 
+def render_project_title(milestone: MilestoneDTO) -> None:
+    """The title printed against your name on the assessment sheet."""
+    with db() as session:
+        current = project_title_for(
+            actor, session, subject_id=milestone.subject_id, student_email=actor.email
+        )
+
+    with st.form(f"project_title_{milestone.subject_id}", border=False):
+        title = st.text_input(
+            "Project title",
+            value=current,
+            max_chars=PROJECT_TITLE_MAX,
+            placeholder="e.g. Smart Attendance System using Face Recognition",
+            help="Printed against your name on the department's assessment "
+            "sheet, for every review in this subject.",
+        )
+        if st.form_submit_button("Save title"):
+            try:
+                with db() as session:
+                    set_project_title(
+                        actor,
+                        session,
+                        subject_id=milestone.subject_id,
+                        student_email=actor.email,
+                        title=title,
+                    )
+                after_mutation("Project title saved.")
+            except RubriQError as exc:
+                st.error(str(exc), icon=":material/error:")
+
+
 def render_history(milestone: MilestoneDTO) -> None:
     with db() as session:
         history = list_submissions(actor, session, milestone_id=milestone.id)
@@ -236,6 +272,8 @@ st.divider()
 # --- the upload ----------------------------------------------------------
 
 st.subheader("Your submission")
+
+render_project_title(milestone)
 
 group = render_group_panel(milestone)
 

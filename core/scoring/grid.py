@@ -57,19 +57,17 @@ def list_grid_rows(
         select(ProjectCycle.subject_id).where(ProjectCycle.id == milestone.cycle_id)
     ).scalar_one()
 
-    students = (
-        session.execute(
-            select(User)
-            .join(Enrollment, Enrollment.student_email == User.email)
-            .where(
-                Enrollment.subject_id == subject_id,
-                Enrollment.is_active.is_(True),
-            )
-            .order_by(User.prn, User.email)
+    enrolled = session.execute(
+        select(User, Enrollment.project_title)
+        .join(Enrollment, Enrollment.student_email == User.email)
+        .where(
+            Enrollment.subject_id == subject_id,
+            Enrollment.is_active.is_(True),
         )
-        .scalars()
-        .all()
-    )
+        .order_by(User.prn, User.email)
+    ).all()
+    students = [user for user, _title in enrolled]
+    titles = {user.email: title or "" for user, title in enrolled}
 
     # One query for the whole cohort's granted groups, rather than one per
     # student inside the loop.
@@ -137,6 +135,7 @@ def list_grid_rows(
                     has_newer_version=False,
                     sheet=None,
                     group_name=group_names.get(group_id) if group_id else None,
+                    project_title=titles.get(student.email, ""),
                 )
             )
             continue
@@ -185,6 +184,7 @@ def list_grid_rows(
                     if target.student_email != student.email
                     else None
                 ),
+                project_title=titles.get(student.email, ""),
             )
         )
 

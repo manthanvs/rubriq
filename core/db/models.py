@@ -185,6 +185,10 @@ class Enrollment(Base):
     )
     batch: Mapped[str | None] = mapped_column(String(32))
     group_label: Mapped[str | None] = mapped_column(String(64))
+    #: What the student's project is called. Per enrolment rather than per
+    #: submission: the project is the same thing across Review 1 and Review 2,
+    #: and the department's assessment sheet prints it as one column.
+    project_title: Mapped[str | None] = mapped_column(String(200))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         UtcDateTime(),

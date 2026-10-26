@@ -23,6 +23,7 @@ from decimal import Decimal
 import streamlit as st
 
 from app.components.ai_runner import render_ai_runner
+from app.components.assessment_sheet import render_assessment
 from app.components.review_grid import (
     LEGEND,
     build_criterion_frame,
@@ -32,13 +33,15 @@ from app.components.review_grid import (
 )
 from app.context import current_actor, db
 from app.state import after_mutation
+from core.academics.enrollment import PROJECT_TITLE_MAX, set_project_title
 from core.academics.milestones import list_milestones
 from core.academics.subjects import list_subjects
 from core.clock import to_ist, utc_now
 from core.errors import RubriQError
+from core.exports.assessment import build_assessment
 from core.exports.rows import build_export_rows
 from core.exports.tsv import to_tsv
-from core.exports.xlsx import to_xlsx
+from core.exports.xlsx import assessment_workbook, to_xlsx
 from core.groups.service import granted_group_for
 from core.rubrics.service import published_rubric_for
 from core.scoring.dto import GridRow
@@ -56,6 +59,8 @@ from core.scoring.sheets import (
     save_manual_scores,
 )
 from core.submissions.service import get_submission
+
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 VERDICT_CHOICES = [
     Verdict.FOLLOWED,
@@ -123,6 +128,7 @@ def score_drawer(row: GridRow, codes: tuple[str, ...], rubric, milestone_id: int
 
     if row.submission_id is None:
         st.warning("No submission for this milestone.", icon=":material/inbox:")
+        render_assessment_tab(row, milestone_id)
         return
 
     st.caption(
@@ -161,16 +167,19 @@ def score_drawer(row: GridRow, codes: tuple[str, ...], rubric, milestone_id: int
     if sheet is not None and sheet.reinstated:
         st.info(f"Reinstated — {sheet.reinstate_reason}", icon=":material/gavel:")
 
-    tabs = ["Score", "History"]
+    tabs = ["Assessment sheet", "Score", "History"]
     if row.is_group_work:
-        tabs.insert(1, "Contribution")
+        tabs.insert(2, "Contribution")
 
     rendered = st.tabs(tabs)
-    tab_score = rendered[0]
+    tab_score = rendered[1]
     tab_history = rendered[-1]
 
+    with rendered[0]:
+        render_assessment_tab(row, milestone_id)
+
     if row.is_group_work:
-        with rendered[1]:
+        with rendered[2]:
             render_contribution(row)
 
     with tab_score:
@@ -212,6 +221,50 @@ def score_drawer(row: GridRow, codes: tuple[str, ...], rubric, milestone_id: int
             )
 
 
+def render_assessment_tab(row: GridRow, milestone_id: int) -> None:
+    """This student's line on the department's form, as it will print.
+
+    The row keeps its class Sr. No. so it can be found on the full sheet. The
+    project title is edited here because this is where its absence shows.
+    """
+    with db() as session:
+        form = build_assessment(
+            actor, session, milestone_id=milestone_id, generated_at=utc_now()
+        ).only(row.student_email)
+
+    render_assessment(form, signatures=False)
+
+    with st.form(f"title_{milestone_id}_{row.student_email}", border=False):
+        title = st.text_input(
+            "Project title",
+            value=row.project_title,
+            max_chars=PROJECT_TITLE_MAX,
+            placeholder="e.g. Smart Attendance System using Face Recognition",
+        )
+        if st.form_submit_button("Save title"):
+            try:
+                with db() as session:
+                    set_project_title(
+                        actor,
+                        session,
+                        subject_id=milestone.subject_id,
+                        student_email=row.student_email,
+                        title=title,
+                    )
+                after_mutation("Project title saved.")
+            except RubriQError as exc:
+                st.error(str(exc), icon=":material/error:")
+
+    st.download_button(
+        "Download this student's sheet (.xlsx)",
+        data=assessment_workbook(form),
+        file_name=f"{form.filename_stem}_{row.prn or 'student'}.xlsx",
+        mime=XLSX,
+        icon=":material/download:",
+        key=f"one_{milestone_id}_{row.student_email}",
+    )
+
+
 def render_score_form(row: GridRow, rubric) -> None:
     """Manual scoring, one row per criterion."""
     existing = {c.code: c for c in (row.sheet.criteria if row.sheet else ())}
@@ -221,7 +274,7 @@ def render_score_form(row: GridRow, rubric) -> None:
 
         for criterion in rubric.criteria:
             current = existing.get(criterion.code)
-            st.markdown(f"**{criterion.code} — {criterion.title}**")
+            st.markdown(f"**{criterion.title}**")
             if criterion.expected_evidence:
                 st.caption(criterion.expected_evidence)
 
@@ -441,7 +494,10 @@ def render_override_form(sheet) -> None:
     )
 
     with st.form(f"override_{sheet.id}"):
-        code = st.selectbox("Criterion", options=[c.code for c in sheet.criteria])
+        titles = {c.code: c.title for c in sheet.criteria}
+        code = st.selectbox(
+            "Criterion", options=list(titles), format_func=titles.__getitem__
+        )
         criterion = next(c for c in sheet.criteria if c.code == code)
 
         new_score = st.number_input(
@@ -611,7 +667,7 @@ else:
 render_bulk_approve(tuple(rows))
 
 st.divider()
-st.subheader("Export")
+st.subheader("Assessment sheet")
 
 with db() as session:
     bundle = build_export_rows(
@@ -619,18 +675,25 @@ with db() as session:
     )
 
 st.caption(
-    "Both exports are built from the saved score sheets, not from this table, "
-    "and carry identical numbers. Unapproved rows are marked as estimates."
+    "The department's form, filled in from the saved score sheets — not from "
+    "the table above. A mark with * is not yet approved."
 )
 
 st.download_button(
-    "Download .xlsx",
+    "Download assessment sheet (.xlsx)",
     data=to_xlsx(bundle),
     file_name=f"{bundle.filename_stem}.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    mime=XLSX,
     type="primary",
     icon=":material/download:",
 )
+st.caption(
+    "Sheet 1 is the form, ready to print and sign · Sheet 2 is the raw data "
+    "with the evidence behind each mark · Sheet 3 explains how to read both."
+)
 
-with st.expander("Copy as TSV (paste into Excel or Sheets)"):
+with st.expander("Preview the assessment sheet"):
+    render_assessment(bundle.assessment)
+
+with st.expander("Copy the table (paste into Excel or Sheets)"):
     st.code(to_tsv(bundle), language=None)

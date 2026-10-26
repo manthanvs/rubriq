@@ -44,7 +44,10 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from sqlalchemy import delete, select  # noqa: E402
 
-from core.academics.enrollment import commit_enrollment_import  # noqa: E402
+from core.academics.enrollment import (  # noqa: E402
+    commit_enrollment_import,
+    set_project_title,
+)
 from core.academics.milestones import create_milestone  # noqa: E402
 from core.academics.subjects import create_cycle, create_subject  # noqa: E402
 from core.audit import record  # noqa: E402
@@ -198,6 +201,80 @@ COHORT_EXTRA: tuple[tuple[str, str, int | None], ...] = (
 
 COHORT: tuple[tuple[str, str, int | None], ...] = COHORT_CASES + COHORT_EXTRA
 
+#: Printed against each name on the department's assessment sheet. The first
+#: is this project's own; the group's two members share one, as a group does.
+OWN_TITLE = "RubriQ – AI-Assisted Project Review & Rubric Evaluation System"
+GROUP_TITLE = "Smart Campus Navigation using Indoor Positioning"
+
+#: Everyone else, handed out in roll order. Ordinary MCA mini projects —
+#: invented, like the people.
+PROJECT_TITLES: tuple[str, ...] = (
+    "Online Bus Pass Renewal System",
+    "Hostel Mess Feedback & Menu Planner",
+    "Library Book Recommendation Engine",
+    "Smart Attendance using Face Recognition",
+    "Placement Drive Management Portal",
+    "Expense Tracker with Budget Alerts",
+    "Blood Bank Donor Finder",
+    "Online Examination & Proctoring System",
+    "Crop Disease Detection from Leaf Images",
+    "Event Ticket Booking Platform",
+    "Inventory Management for Small Retailers",
+    "Alumni Connect Portal",
+    "Parking Slot Availability Tracker",
+    "Fake News Detection using NLP",
+    "Gym Membership & Workout Planner",
+    "Hospital Appointment Scheduler",
+    "Student Grievance Redressal System",
+    "Movie Recommendation using Collaborative Filtering",
+    "Water Quality Monitoring Dashboard",
+    "College Canteen Pre-ordering App",
+    "Resume Screening using Machine Learning",
+    "Lost and Found Portal for Campus",
+    "Real-Time Chat Application",
+    "Stock Price Trend Visualiser",
+    "Online Voting System with OTP Verification",
+    "Tiffin Service Subscription Manager",
+    "Sign Language to Text Converter",
+    "Personal Finance Advisor Chatbot",
+    "Vehicle Service Booking System",
+    "Plagiarism-Aware Assignment Portal",
+    "E-Learning Platform with Progress Tracking",
+    "Traffic Sign Recognition using CNN",
+    "Pet Adoption Portal",
+    "Laboratory Equipment Booking System",
+    "Weather-Based Crop Advisory",
+    "Freelancer Job Marketplace",
+    "Medical Store Billing System",
+    "Sentiment Analysis of Product Reviews",
+    "Society Maintenance Management",
+    "Travel Itinerary Planner",
+    "Handwritten Digit Recognition",
+    "Courier Tracking System",
+    "Smart Home Energy Monitor",
+    "Online Quiz Platform for Colleges",
+    "Waste Collection Route Optimiser",
+    "Doctor Consultation via Video Call",
+    "Car Pooling App for Commuters",
+    "Fitness Diet Recommendation System",
+    "Exam Timetable Generator",
+    "Real Estate Listing Portal",
+    "Voice-Controlled Desktop Assistant",
+    "Online Art Gallery & Auction",
+    "Recipe Finder from Available Ingredients",
+    "Disaster Relief Coordination Portal",
+    "Cyber Security Awareness Quiz Game",
+    "Farmers' Produce Marketplace",
+    "Hotel Room Booking System",
+    "Bank Loan Eligibility Predictor",
+    "Classroom Occupancy Monitor",
+    "Second-Hand Book Exchange",
+    "Mental Health Check-in Journal",
+    "Visitor Management System for Offices",
+    "Air Quality Index Forecaster",
+    "Internship Diary & Mentor Feedback Portal",
+)
+
 #: What the guide wrote on a sheet. Keyed by name so a note belongs to a
 #: student rather than to a position in a loop.
 DEFAULT_FACULTY_NOTE = "Objectives are clear. Number the requirements next time."
@@ -294,8 +371,7 @@ REVIEW_TWO_CRITERIA = (
         "5 Intuitive, user-friendly and visually appealing · 4 Good, minor "
         "usability or aesthetic issues · 2-3 Adequate but unpolished · "
         "1 Poor, significant usability issues · 0 Missing or unusable",
-        "Consistent layout, readable states, and a clear next action on "
-        "every page.",
+        "Consistent layout, readable states, and a clear next action on every page.",
         False,
     ),
     (
@@ -679,6 +755,23 @@ def build(
             faculty, session, subject_id=subject_id, csv_text=csv_text, settings=settings
         )
         counts["students"] = len(result.committable)
+
+    with session_scope(factory) as session:
+        handed_out = iter(PROJECT_TITLES)
+        for name, _prn, _late in COHORT:
+            if name == COHORT_CASES[0][0]:
+                title = OWN_TITLE
+            elif name in GRANTED_GROUP[1]:
+                title = GROUP_TITLE
+            else:
+                title = next(handed_out)
+            set_project_title(
+                faculty,
+                session,
+                subject_id=subject_id,
+                student_email=_handle(name),
+                title=title,
+            )
 
     # -- GitHub register and groups (decisions #6 and #5) ----------------
     with session_scope(factory) as session:

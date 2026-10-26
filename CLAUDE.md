@@ -136,7 +136,7 @@ AuditLog (actor_email, action, entity, entity_id, payload JSON, at)
 `core/scoring/engine.py`. Pure functions, zero DB access, fully unit-tested.
 
 ```python
-base_total = Σ (score / criterion.max_score) * criterion.weight
+base_total = Σ(score / criterion.max_score) * criterion.weight
 ```
 
 ### 5.1 Late & absence policy
@@ -299,9 +299,9 @@ Stream graph node transitions into `st.status` so the demo shows the machine thi
 with st.status("Evaluating submissions…", expanded=True) as status:
     for sub in pending:
         st.write(f"**Submission v{sub.version}**")
-        for node, _ in stream_evaluation(sub):      # yields node names
+        for node, _ in stream_evaluation(sub):  # yields node names
             st.write(f"  · {node}")
-        persist(sub)                                 # commit per submission
+        persist(sub)  # commit per submission
     status.update(label="Done", state="complete")
 ```
 
@@ -331,6 +331,7 @@ Rendered with `st.data_editor`, one row per student per milestone:
 - **Two export paths, both required:**
   - `st.code(tsv_string)` → the built-in copy button pastes cleanly into Excel/Sheets.
   - `st.download_button` → real `.xlsx` from `openpyxl`, frozen header row, per-criterion columns, second sheet with evidence + rationale text.
+  - **Since Phase 11:** Sheet 1 is the department's printed assessment form (`core/exports/assessment.py`), Sheet 2 the raw data with evidence, Sheet 3 a reading guide. The TSV copies the form's table. The same form renders in the score drawer and on the student's Feedback page.
 - Filename: `RubriQ_<SubjectCode>_Review<N>_<YYYYMMDD>.xlsx`
 
 ---

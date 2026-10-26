@@ -16,7 +16,7 @@ worth less than an assertion.
 make test
 ```
 
-**729 tests, all passing.** The full verbose run is checked in at
+**756 tests, all passing.** The full verbose run is checked in at
 [`test-report.txt`](test-report.txt); regenerate it with:
 
 ```bash
@@ -95,7 +95,7 @@ MT-17 and MT-18 re-run live against Gemini on 5 September 2026.
 | MT-20 | The system works with no AI key | Remove the `[llm]` section and open every faculty page | Nothing raises; deterministic features unaffected | All eight faculty pages render with no exception | **Pass** — invariant #10, executed via `AppTest` |
 | MT-21 | Reports agree with the grid and the export | Compare the class mean against the exported marks | The same numbers appear everywhere | Passed after a fix — see D11 |  **Pass** |
 | MT-15 | Clone to populated system in one command | `make seed && make run` | A browsable, populated system with no manual setup | `students 8, submissions 8, approved 3, questions 3`; app served and browsed | **Pass** — Phase 7 exit criterion |
-| MT-16 | Export opens in Excel | Build the `.xlsx` and inspect the workbook | Frozen header, per-criterion columns, second sheet with evidence | Filename `RubriQ_MCA33EL03_Review1_20260905`; sheets `Scores`, `Evidence`, `About`; freeze pane at `A2`; 19 columns including `Group`, `Adjustment`, `Adjustment Reason`; `ABSENT` as a status; the adjusted member exporting 9.13 rather than the group's 11.63 | **Pass (structure)** — opening it in Excel itself is still a human step |
+| MT-16 | Export opens in Excel | Build the `.xlsx` and inspect the workbook | Frozen header, per-criterion columns, second sheet with evidence | Filename `RubriQ_MCA33EL03_Review1_20260905`; sheets `Assessment Sheet`, `Raw Data`, `How to Use`; the form laid out as the department prints it, A4 landscape; criteria headed by name; `AB` for absent, `*` on unapproved marks; raw data frozen at `C2` with `Group`, `Adjustment`, `Adjustment Reason`; the adjusted member exporting their own mark rather than the group's | **Pass (structure)** — opening it in Excel itself is still a human step |
 | MT-17 | Refresh mid-evaluation makes no duplicate model call | Run an evaluation to completion, then re-enter the same `thread_id` | The resumed run replays from the checkpoint and calls the model zero times | Run 1: full node path, **1** live Gemini call, COMPLETE. Run 2 on `eval:3:8`: no nodes re-executed, **0** live calls, identical result | **Pass (live API)** |
 | MT-18 | Live Gemini evaluation, in-scope answer | Run evaluations against the seeded cohort with a real key | Criteria scored, evidence verified against the submitted text | 4/4 submissions completed on `gemini-3.6-flash`, 15–33 s each. Verdicts matched the seeded content: the one student whose file contains the SRS section scored C2 FOLLOWED; the rest returned C2/C3 `NO_EVIDENCE`, and the absent student rendered `ABSENT` rather than a number | **Pass (live API)** |
 

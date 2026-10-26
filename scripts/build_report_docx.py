@@ -73,7 +73,7 @@ SUBTITLE = (
     "and Faculty Approval)"
 )
 
-TESTS_TOTAL = 729
+TESTS_TOTAL = 756
 
 #: Shown on the title page and in §1.3. Private at the time of writing; make
 #: the repository public before handing the report in, or the link is dead
@@ -421,8 +421,7 @@ SCOPE_OUT = [
     "system or university portal.",
     "Multiple institutions in one deployment. The system assumes a single "
     "institute and a single email domain.",
-    "Real-time collaborative editing of a rubric or a score sheet by two "
-    "people at once.",
+    "Real-time collaborative editing of a rubric or a score sheet by two people at once.",
     "Production hosting of real student data, which is a decision for the "
     "institution rather than for this project.",
 ]

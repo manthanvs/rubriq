@@ -14,9 +14,11 @@ from __future__ import annotations
 
 import streamlit as st
 
+from app.components.assessment_sheet import render_assessment
 from app.context import current_actor, db
 from core.academics.milestones import list_milestones
-from core.clock import to_ist
+from core.clock import to_ist, utc_now
+from core.exports.assessment import build_own_assessment
 from core.scoring.enums import Verdict
 from core.scoring.sheets import sheet_for_submission
 from core.submissions.service import latest_submission
@@ -69,6 +71,15 @@ if sheet is None or not sheet.is_approved:
     )
     st.stop()
 
+with db() as session:
+    form = build_own_assessment(
+        actor, session, milestone_id=milestone.id, generated_at=utc_now()
+    )
+
+if form is not None:
+    # Your line of the department's form, exactly as your guide signs it.
+    render_assessment(form, signatures=False)
+
 left, right = st.columns(2)
 left.metric("Your mark", sheet.display_total, help=f"Out of {sheet.max_marks:g}")
 right.metric("Days late", sheet.days_late)
@@ -102,15 +113,13 @@ st.subheader("Against each criterion")
 for criterion in sheet.criteria:
     with st.container(border=True):
         head, mark = st.columns([4, 1])
-        head.markdown(
-            f"**{criterion.verdict.glyph} {criterion.code} — {criterion.title}**"
-        )
+        head.markdown(f"**{criterion.verdict.glyph} {criterion.title}**")
         head.caption(VERDICT_HELP[criterion.verdict])
         # A real label, hidden rather than omitted: Streamlit warns that an
         # empty one may become an exception, and a screen reader announcing
         # "8/10" with no idea what it measures is the same problem.
         mark.metric(
-            f"{criterion.code} score",
+            f"{criterion.title} score",
             f"{criterion.score:g}/{criterion.max_score:g}",
             label_visibility="collapsed",
         )
@@ -121,9 +130,9 @@ for criterion in sheet.criteria:
             st.caption("Evidence from your submission:")
             st.info(criterion.evidence_span)
 
-followed = [c.code for c in sheet.criteria if c.verdict is Verdict.FOLLOWED]
+followed = [c.title for c in sheet.criteria if c.verdict is Verdict.FOLLOWED]
 missing = [
-    c.code
+    c.title
     for c in sheet.criteria
     if c.verdict in (Verdict.NOT_FOLLOWED, Verdict.NO_EVIDENCE)
 ]

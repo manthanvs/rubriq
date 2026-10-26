@@ -156,7 +156,7 @@ database, so no later stage — including the AI layer — reads a file.
 
 | Format | Produced by | Notes |
 |---|---|---|
-| `.xlsx` | `openpyxl` | Frozen header row, per-criterion columns, second sheet carrying evidence and rationale |
+| `.xlsx` | `openpyxl` | Sheet 1 the department's assessment form (A4 landscape), Sheet 2 raw data with evidence and rationale, Sheet 3 a guide to reading both |
 | TSV | `core/exports/tsv.py` | Rendered with `st.code`, so the built-in copy button pastes into Excel or Sheets |
 
 Both consume the same row builder over persisted score sheets, and a parity

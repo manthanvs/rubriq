@@ -140,6 +140,10 @@ class GridRow:
     member_delta: Decimal | None = None
     member_reason: str | None = None
 
+    #: What the student's project is called, from their enrolment. Printed
+    #: on the department's assessment sheet; empty until someone sets it.
+    project_title: str = ""
+
     @property
     def has_submitted(self) -> bool:
         return self.submission_id is not None

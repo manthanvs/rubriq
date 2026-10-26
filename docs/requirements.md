@@ -132,7 +132,7 @@ Paths are relative to the repository root.
 |---|---|---|---|
 | FR-45 | A student shall see per-criterion feedback only after the score sheet is approved | `app/pages/student/feedback.py`, `core/scoring/sheets.py` | `tests/core/scoring/test_sheets.py` |
 | FR-46 | Both exporters shall consume one row builder over persisted score sheets, never grid widget state | `core/exports/rows.py` | `tests/core/exports/test_parity.py` |
-| FR-47 | The TSV and the XLSX shall agree cell for cell | `core/exports/tsv.py`, `core/exports/xlsx.py` | `tests/core/exports/test_parity.py` |
+| FR-47 | The copied table and the XLSX assessment sheet shall agree cell for cell | `core/exports/tsv.py`, `core/exports/xlsx.py` | `tests/core/exports/test_parity.py` |
 | FR-48 | An unapproved row shall export carrying an explicit `ESTIMATE — NOT APPROVED` marker | `core/exports/rows.py` | `tests/core/exports/test_parity.py` |
 | FR-49 | The export filename shall be `RubriQ_<SubjectCode>_Review<N>_<YYYYMMDD>` | `core/exports/rows.py` | `tests/core/exports/test_parity.py` |
 | FR-50 | Reports shall show a score distribution, a per-criterion weak-spot chart, and an attendance mix, excluding absences from the mean | `core/reports/service.py` | `tests/core/reports/test_reports.py` |

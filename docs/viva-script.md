@@ -179,11 +179,15 @@ Point at four things, in this order:
 
 ### 8 · Export to Excel — 1 minute
 
-**Do:** download the `.xlsx` and open it.
+**Do:** click **Download assessment sheet (.xlsx)** under the grid and open it.
 
-> "And this is a real Excel file, not a renamed CSV. Same numbers as the
-> screen — there's a test that checks the two can't disagree. The absent
-> student still says ABSENT here, not zero."
+> "The first sheet is the department's own assessment form — institute
+> header, particulars, one column per criterion, the Marks row, and the three
+> signatures — filled in and ready to print. The absent student says AB, not
+> zero, and anything I haven't approved carries a star. The second sheet is
+> the raw data with the evidence behind every mark, and the third explains
+> how to read it. Clicking any student in the grid shows their line of the
+> same form."
 
 ---
 

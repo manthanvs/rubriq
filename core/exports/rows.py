@@ -28,6 +28,7 @@ from core.academics.milestones import get_milestone
 from core.auth.actor import Actor
 from core.clock import to_ist
 from core.db.models import ProjectCycle, ReviewMilestone, Subject
+from core.exports.assessment import AssessmentSheet, build_assessment
 from core.scoring.grid import list_grid_rows
 
 #: Stamped into the status column of any row that nobody has approved.
@@ -46,6 +47,7 @@ class ExportRow:
     prn: str
     name: str
     email: str
+    project_title: str
     submitted_at: str
     days_late: str
     status: str
@@ -81,6 +83,11 @@ class ExportBundle:
     rows: tuple[ExportRow, ...]
     generated_at: datetime
     evidence: tuple[dict[str, str], ...] = field(default_factory=tuple)
+    #: What each code is called. Codes order the columns; titles head them,
+    #: because a guide reads "System Design", not "C4".
+    criterion_titles: dict[str, str] = field(default_factory=dict)
+    #: The department's form, built from the same rows (Sheet 1).
+    assessment: AssessmentSheet | None = None
 
     @property
     def filename_stem(self) -> str:
@@ -94,11 +101,12 @@ class ExportBundle:
             "PRN",
             "Name",
             "Email",
+            "Project Title",
             "Submitted (IST)",
             "Days Late",
             "Status",
             "Group",
-            *self.criterion_codes,
+            *[self.criterion_titles.get(c, c) for c in self.criterion_codes],
             "Base",
             "Penalty",
             "Adjustment",
@@ -119,6 +127,7 @@ class ExportBundle:
                     row.prn,
                     row.name,
                     row.email,
+                    row.project_title,
                     row.submitted_at,
                     row.days_late,
                     row.status,
@@ -154,13 +163,16 @@ def build_export_rows(
     grid_rows = list_grid_rows(actor, session, milestone_id=milestone_id)
 
     codes: list[str] = []
+    titles: dict[str, str] = {}
     for row in grid_rows:
         if row.sheet is None:
             continue
         for criterion in row.sheet.criteria:
             if criterion.code not in codes:
                 codes.append(criterion.code)
-    codes.sort()
+                titles[criterion.code] = criterion.title
+    # By number, not as text: "C10" belongs after "C9", not after "C1".
+    codes.sort(key=lambda code: (len(code), code))
 
     rows: list[ExportRow] = []
     evidence: list[dict[str, str]] = []
@@ -174,6 +186,7 @@ def build_export_rows(
                     prn=row.prn or "",
                     name=row.student_name,
                     email=row.student_email,
+                    project_title=row.project_title,
                     submitted_at=(
                         to_ist(row.submitted_at).strftime("%Y-%m-%d %H:%M")
                         if row.submitted_at
@@ -205,6 +218,7 @@ def build_export_rows(
                 prn=row.prn or "",
                 name=row.student_name,
                 email=row.student_email,
+                project_title=row.project_title,
                 submitted_at=(
                     to_ist(row.submitted_at).strftime("%Y-%m-%d %H:%M")
                     if row.submitted_at
@@ -241,7 +255,7 @@ def build_export_rows(
                 {
                     "PRN": row.prn or "",
                     "Name": row.student_name,
-                    "Criterion": criterion.code,
+                    "Criterion": criterion.title,
                     "Verdict": str(criterion.verdict),
                     "Score": f"{criterion.score}",
                     "Evidence": criterion.evidence_span or "",
@@ -259,4 +273,8 @@ def build_export_rows(
         rows=tuple(rows),
         generated_at=generated_at,
         evidence=tuple(evidence),
+        criterion_titles=titles,
+        assessment=build_assessment(
+            actor, session, milestone_id=milestone_id, generated_at=generated_at
+        ),
     )

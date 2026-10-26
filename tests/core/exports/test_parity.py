@@ -1,7 +1,10 @@
 """Fix item 11 — export consistency.
 
 The proof it asks for: *"a parity test asserting the TSV cell grid equals the
-XLSX cell grid, value for value."* That is :class:`TestParity` below.
+XLSX cell grid, value for value."* That is :class:`TestParity` below. Since the
+export became the department's assessment sheet, the TSV copies that sheet's
+table, so parity is checked against the table on Sheet 1 — and the raw data
+on Sheet 2 is checked against the bundle it was written from.
 
 The other named failures each get a test too: an absent student exporting as
 ``0``, an unapproved estimate exporting as though it were final, and the
@@ -19,9 +22,10 @@ from openpyxl import load_workbook
 
 from core.clock import IST
 from core.db.engine import session_scope
+from core.exports.assessment import ABSENT, ESTIMATE_MARK
 from core.exports.rows import ESTIMATE_MARKER, build_export_rows
 from core.exports.tsv import to_tsv
-from core.exports.xlsx import to_xlsx
+from core.exports.xlsx import TABLE_ROW, to_xlsx
 from core.scoring.enums import Verdict
 from core.scoring.sheets import approve_sheet, reinstate, save_manual_scores
 
@@ -39,13 +43,35 @@ def _bundle(db_factory, world, milestone_id):
         )
 
 
+def _text(value) -> str:
+    return "" if value is None else str(value)
+
+
 def _xlsx_cells(data: bytes) -> list[list[str]]:
+    """The table on Sheet 1 — headings, Marks row, students — as text."""
     workbook = load_workbook(io.BytesIO(data))
-    sheet = workbook["Scores"]
-    return [
-        ["" if cell is None else str(cell) for cell in row]
-        for row in sheet.iter_rows(values_only=True)
+    sheet = workbook["Assessment Sheet"]
+    headings = [
+        _text(c) for c in next(sheet.iter_rows(min_row=TABLE_ROW, values_only=True))
     ]
+    width = headings.index("Total") + 1
+    table = []
+    for row in sheet.iter_rows(min_row=TABLE_ROW, max_col=width, values_only=True):
+        if row[0] is None and row[3] is None:
+            break
+        table.append([_text(c) for c in row])
+    return table
+
+
+def _raw_cells(data: bytes) -> list[list[str]]:
+    """The score table on Sheet 2, stopping at the evidence block beneath."""
+    workbook = load_workbook(io.BytesIO(data))
+    rows = []
+    for row in workbook["Raw Data"].iter_rows(values_only=True):
+        if all(c is None for c in row):
+            break
+        rows.append([_text(c) for c in row])
+    return rows
 
 
 def _tsv_cells(text: str) -> list[list[str]]:
@@ -96,8 +122,16 @@ class TestParity:
     ) -> None:
         bundle = _bundle(db_factory, world, graded.milestone_id)
 
-        assert _tsv_cells(to_tsv(bundle))[0] == list(bundle.headers)
-        assert _xlsx_cells(to_xlsx(bundle))[0] == list(bundle.headers)
+        headings = list(bundle.assessment.column_headers)
+        assert _tsv_cells(to_tsv(bundle))[0] == headings
+        assert _xlsx_cells(to_xlsx(bundle))[0] == headings
+
+    def test_the_raw_data_sheet_is_the_bundle(
+        self, db_factory, world, graded, scored
+    ) -> None:
+        bundle = _bundle(db_factory, world, graded.milestone_id)
+
+        assert _raw_cells(to_xlsx(bundle)) == bundle.cells()
 
 
 class TestApprovalIsVisible:
@@ -106,9 +140,13 @@ class TestApprovalIsVisible:
     ) -> None:
         """Invariant #1 must survive to the last step of the pipeline."""
         bundle = _bundle(db_factory, world, graded.milestone_id)
-        text = to_tsv(bundle)
+        row = next(
+            r for r in bundle.assessment.rows if r.student_email == world.student_1.email
+        )
 
-        assert ESTIMATE_MARKER in text
+        assert row.is_estimate
+        assert row.total.endswith(ESTIMATE_MARK)
+        assert any(ESTIMATE_MARKER in r.status for r in bundle.rows)
 
     def test_an_approved_row_carries_no_estimate_marker(
         self, db_factory, world, graded, scored
@@ -132,7 +170,8 @@ class TestApprovalIsVisible:
         bundle = _bundle(db_factory, world, graded.milestone_id)
 
         assert "Approved By" in bundle.headers
-        assert world.faculty_a.email in to_tsv(bundle)
+        raw = _raw_cells(to_xlsx(bundle))
+        assert any(world.faculty_a.email in row for row in raw)
 
 
 class TestAbsentNeverExportsAsANumber:
@@ -160,11 +199,15 @@ class TestAbsentNeverExportsAsANumber:
         row = next(r for r in bundle.rows if r.email == world.student_1.email)
 
         assert row.final_total == "ABSENT"
-        assert "ABSENT" in to_tsv(bundle)
 
-        cells = _xlsx_cells(to_xlsx(bundle))
+        # On the form it is written the way a guide writes it, criteria blank.
+        form = _tsv_cells(to_tsv(bundle))
+        assert any(cells[-1] == ABSENT and not any(cells[4:-1]) for cells in form[2:])
+        assert _xlsx_cells(to_xlsx(bundle)) == form
+
+        raw = _raw_cells(to_xlsx(bundle))
         final_index = list(bundle.headers).index("Final")
-        assert any(row[final_index] == "ABSENT" for row in cells[1:])
+        assert any(cells[final_index] == "ABSENT" for cells in raw[1:])
 
     def test_a_reinstated_student_scores_again(self, db_factory, world, graded) -> None:
         from core.db.models import ReviewMilestone, Submission
@@ -222,14 +265,31 @@ class TestWorkbookShape:
         bundle = _bundle(db_factory, world, graded.milestone_id)
         workbook = load_workbook(io.BytesIO(to_xlsx(bundle)))
 
-        assert "Scores" in workbook.sheetnames
-        assert "Evidence" in workbook.sheetnames
+        assert workbook.sheetnames == ["Assessment Sheet", "Raw Data", "How to Use"]
+        raw = [
+            [_text(c) for c in row]
+            for row in workbook["Raw Data"].iter_rows(values_only=True)
+        ]
+        assert ["Evidence and rationale"] == [
+            c for c in raw[len(bundle.cells()) + 2] if c
+        ]
 
-    def test_the_header_row_is_frozen(self, db_factory, world, graded, scored) -> None:
+    def test_the_raw_data_header_row_is_frozen(
+        self, db_factory, world, graded, scored
+    ) -> None:
         bundle = _bundle(db_factory, world, graded.milestone_id)
         workbook = load_workbook(io.BytesIO(to_xlsx(bundle)))
 
-        assert workbook["Scores"].freeze_panes == "A2"
+        assert workbook["Raw Data"].freeze_panes == "C2"
+
+    def test_the_form_prints_on_a4_landscape(
+        self, db_factory, world, graded, scored
+    ) -> None:
+        bundle = _bundle(db_factory, world, graded.milestone_id)
+        sheet = load_workbook(io.BytesIO(to_xlsx(bundle)))["Assessment Sheet"]
+
+        assert sheet.page_setup.orientation == "landscape"
+        assert sheet.page_setup.fitToWidth == 1
 
     def test_a_tab_inside_a_note_cannot_break_the_tsv_columns(
         self, db_factory, world, graded, scored

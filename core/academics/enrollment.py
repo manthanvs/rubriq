@@ -34,7 +34,7 @@ from core.auth.roles import Role, resolve_role
 from core.clock import utc_now
 from core.config import Settings
 from core.db.models import Enrollment, User
-from core.errors import AuthError, ValidationError
+from core.errors import AuthError, NotAuthorized, ValidationError
 
 REQUIRED_HEADERS = ("email", "name", "prn")
 OPTIONAL_HEADERS = ("batch", "group_label")
@@ -388,3 +388,86 @@ def list_enrollments(
         )
         for enrollment, user in rows
     )
+
+
+#: Long enough for a real title, short enough to fit the assessment sheet's
+#: column without the row growing to six lines when printed.
+PROJECT_TITLE_MAX = 200
+
+
+def project_title_for(
+    actor: Actor, session: Session, *, subject_id: int, student_email: str
+) -> str:
+    """The project title on record, or an empty string.
+
+    A student may read only their own; faculty only within a subject they own.
+    """
+    student_email = normalise_email(student_email)
+    if actor.role is Role.STUDENT:
+        if student_email != actor.email:
+            raise NotAuthorized("You can only see your own project title.")
+    else:
+        get_subject(actor, session, subject_id)  # ownership, by reuse
+
+    title = session.scalar(
+        select(Enrollment.project_title).where(
+            Enrollment.subject_id == subject_id,
+            Enrollment.student_email == student_email,
+        )
+    )
+    return title or ""
+
+
+def set_project_title(
+    actor: Actor,
+    session: Session,
+    *,
+    subject_id: int,
+    student_email: str,
+    title: str,
+) -> str:
+    """Record what a student's project is called.
+
+    The student may set their own; the guide may correct any student's in a
+    subject they own. Either way the change is audited, because the title is
+    printed on the department's assessment sheet beside the marks.
+    """
+    student_email = normalise_email(student_email)
+
+    if actor.role is Role.STUDENT:
+        if student_email != actor.email:
+            raise NotAuthorized("You can only set your own project title.")
+    else:
+        get_subject(actor, session, subject_id)
+
+    title = " ".join((title or "").split())
+    if len(title) > PROJECT_TITLE_MAX:
+        raise ValidationError(
+            f"Keep the project title under {PROJECT_TITLE_MAX} characters."
+        )
+
+    enrollment = session.scalar(
+        select(Enrollment).where(
+            Enrollment.subject_id == subject_id,
+            Enrollment.student_email == student_email,
+            Enrollment.is_active.is_(True),
+        )
+    )
+    if enrollment is None:
+        raise NotAuthorized("That student is not enrolled in this subject.")
+
+    previous = enrollment.project_title or ""
+    if previous == title:
+        return title
+
+    enrollment.project_title = title or None
+    record(
+        session,
+        actor_email=actor.email,
+        action="enrollment.project_title_set",
+        entity="Enrollment",
+        entity_id=enrollment.id,
+        payload={"student": student_email, "old": previous, "new": title},
+    )
+    session.flush()
+    return title

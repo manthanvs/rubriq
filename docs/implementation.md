@@ -246,13 +246,30 @@ a mark noun and a self-directed future reference independently of their order.
 
 ## 10. Exports
 
-`core/exports/rows.py::build_export_rows` is the single source. `tsv.py` and
-`xlsx.py` are formatters over its output, and
-`tests/core/exports/test_parity.py` asserts the two cell grids are equal value
-for value.
+`core/exports/rows.py::build_export_rows` is the single source. It carries
+the raw rows and, built from the same grid, the department's assessment sheet
+(`core/exports/assessment.py`). `tsv.py` and `xlsx.py` are formatters over
+that, and `tests/core/exports/test_parity.py` asserts the copied table and
+the spreadsheet's table are equal value for value.
 
-The XLSX carries a frozen header row, per-criterion columns, and a second
-sheet with evidence and rationale text. Filename:
+The workbook has three sheets:
+
+1. **Assessment Sheet** — PCCoE's printed form: the institute header and logo,
+   the grey title band, the particulars (department, academic year, semester,
+   year, subject, date, guide, review), then Sr. No. / PRN / Name / Project
+   Title / one column per criterion headed by its name / Total, with a Marks
+   row and the three signatures. A4 landscape, headings repeated on page two.
+   `AB` is absent, `NS` no submission, `—` not yet scored; `*` marks an
+   unapproved estimate and `†` a total reduced by a late penalty or an
+   individual adjustment. A legend prints only the codes actually used.
+2. **Raw Data** — every column held for each student, frozen header, with the
+   evidence and rationale behind each criterion score beneath it.
+3. **How to Use** — what the file is, what the codes mean, how a total is
+   reached.
+
+The same form renders on screen (`app/components/assessment_sheet.py`): the
+whole class under the Review Grid, one student's line in the score drawer,
+and a student's own line on Feedback once approved. Filename:
 `RubriQ_<SubjectCode>_Review<N>_<YYYYMMDD>.xlsx`.
 
 ---

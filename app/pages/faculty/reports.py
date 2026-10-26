@@ -120,7 +120,7 @@ st.caption(
 
 weak = pd.DataFrame(
     {
-        "Criterion": [f"{c.code}" for c in report.criteria],
+        "Criterion": [c.title for c in report.criteria],
         "Mean %": [float(c.mean_percent) for c in report.criteria],
     }
 ).set_index("Criterion")
@@ -129,7 +129,7 @@ st.bar_chart(weak, height=240)
 weakest = report.weakest
 if weakest is not None:
     st.warning(
-        f"**{weakest.code} — {weakest.title}** is the weakest criterion at "
+        f"**{weakest.title}** is the weakest criterion at "
         f"{weakest.mean_percent}% of its maximum"
         + (
             f", and {weakest.unevidenced} submission(s) had no evidence for it."
